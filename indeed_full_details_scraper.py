@@ -20,6 +20,9 @@ import re
 import warnings
 from datetime import datetime, timedelta
 
+now = datetime.now()
+default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+
 # Suppress warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -356,6 +359,7 @@ class IndeedFullDetailsScraper:
                         if loc_text and not job_data['_job_location']:
                             job_data['_job_location'] = loc_text
                             job_data['_job_address'] = loc_text
+                            job_data['_job_map_location'] = loc_text
                             break
                     except:
                         continue
@@ -451,7 +455,7 @@ class IndeedFullDetailsScraper:
             '_job_category': None,
             '_job_type': None,
             '_job_tag': [],
-            '_job_expiry_date': None,
+            '_job_expiry_date': default_deadline,
             '_job_gender': None,
             '_job_apply_type': 'external',
             '_job_apply_url': None,
@@ -464,7 +468,7 @@ class IndeedFullDetailsScraper:
             '_job_qualification': None,
             '_job_video_url': None,
             '_job_photos': [],
-            '_job_application_deadline_date': None,
+            '_job_application_deadline_date': default_deadline,
             '_job_address': None,
             '_job_location': None,
             '_job_map_location': None
@@ -511,6 +515,7 @@ class IndeedFullDetailsScraper:
                     location_text = location_elem.text.strip()
                     job_data['_job_location'] = location_text
                     job_data['_job_address'] = location_text
+                    job_data['_job_map_location'] = location_text
                     break
                 except:
                     continue

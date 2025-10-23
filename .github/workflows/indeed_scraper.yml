@@ -1,8 +1,8 @@
-name: Weekly Indeed Scraper (Hosted Runner Compatible)
+name: Weekly Indeed Scraper
 
 on:
   schedule:
-    - cron: "0 0 * * 1"
+    - cron: "0 0 * * 1"  # Every Monday at 00:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -11,58 +11,60 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
+      # 3️⃣ Install dependencies (including undetected-chromedriver)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install selenium webdriver-manager
+          pip install selenium undetected-chromedriver webdriver-manager
 
-      - name: Install Chrome & ChromeDriver
+      # 4️⃣ Install Google Chrome and ChromeDriver
+      - name: Install Google Chrome and ChromeDriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget unzip xvfb
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
           google-chrome --version
-          wget https://chromedriver.storage.googleapis.com/$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/
+
+          # Match ChromeDriver version
+          CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+          DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_$CHROME_VERSION")
+          wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+          unzip chromedriver-linux64.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
           chromedriver --version
 
+      # 5️⃣ Run Indeed Scraper
       - name: Run Indeed scraper
         env:
           PYTHONUNBUFFERED: 1
         run: |
           python - <<'EOF'
-          from selenium import webdriver
-          from selenium.webdriver.chrome.service import Service
-          from selenium.webdriver.chrome.options import Options
+          import os
           from indeed_full_details_scraper import IndeedFullDetailsScraper
           from datetime import datetime
 
-          print("🚀 Running Indeed Scraper in Headless Mode...")
+          print("🚀 Running Indeed Scraper (Hosted Runner + undetected-chromedriver)")
 
-          # Force Selenium to use normal ChromeDriver
-          options = Options()
-          options.add_argument("--headless=new")
-          options.add_argument("--no-sandbox")
-          options.add_argument("--disable-dev-shm-usage")
-          options.add_argument("--window-size=1920,1080")
-
-          # Monkey-patch to skip undetected-chromedriver
-          import indeed_full_details_scraper
-          indeed_full_details_scraper.uc.Chrome = lambda options=None: webdriver.Chrome(options=options)
+          search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
 
           scraper = IndeedFullDetailsScraper(headless=True)
-          jobs = scraper.scrape_jobs("https://cr.indeed.com/jobs?q=&l=costa+rica", max_pages=3, extract_full_details=True)
+          jobs = scraper.scrape_jobs(search_url, max_pages=2, extract_full_details=True)
+
+          if not jobs:
+              print("⚠️ No jobs scraped.")
+              exit(1)
 
           timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
           csv_file = f'indeed_cr_jobs_{timestamp}.csv'
@@ -71,10 +73,12 @@ jobs:
           scraper.save_to_csv(jobs, csv_file)
           scraper.save_to_json(jobs, json_file)
           scraper.close()
-          print("✅ Scraping complete!")
+
+          print(f"✅ Scraping complete! Files saved: {csv_file}, {json_file}")
           EOF
 
-      - name: Upload results
+      # 6️⃣ Upload Results
+      - name: Upload scraped data
         uses: actions/upload-artifact@v4
         with:
           name: indeed-scraped-data

@@ -8,7 +8,7 @@ on:
 jobs:
   scrape-indeed:
     runs-on: self-hosted  # IMPORTANT: run on your own machine (Windows/Linux)
-    timeout-minutes: 60
+    timeout-minutes: 2
 
     steps:
       # 1️⃣ Checkout your repository

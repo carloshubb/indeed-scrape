@@ -2,166 +2,104 @@ name: Indeed Costa Rica Job Scraper
 
 on:
   schedule:
-    - cron: '0 8 * * *'
-  
-  workflow_dispatch:
-    inputs:
-      max_pages:
-        description: 'Maximum pages to scrape'
-        required: false
-        default: '3'
-      max_jobs:
-        description: 'Maximum jobs (leave empty for all)'
-        required: false
-        default: '50'
-      headless:
-        description: 'Run in headless mode'
-        required: false
-        default: 'true'
+    # Run daily at 2 AM UTC (adjust timezone as needed)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
+  push:
+    branches:
+      - main
+    paths:
+      - 'indeed_full_details_scraper.py'
+      - '.github/workflows/indeed-scraper.yml'
 
 jobs:
   scrape-jobs:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: Install system dependencies
-      run: |
-        echo "📦 Installing system dependencies..."
-        sudo apt-get update
-        sudo apt-get install -y wget unzip xvfb
-        
-        # Install Chrome
-        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
-        rm google-chrome-stable_current_amd64.deb
-        
-        # Verify Chrome installation
-        google-chrome --version
-        which google-chrome
-    
-    - name: Install Python dependencies
-      run: |
-        echo "🐍 Installing Python packages..."
-        python -m pip install --upgrade pip
-        pip install selenium webdriver-manager
-        pip list
-    
-    - name: Verify environment
-      run: |
-        echo "🔍 Environment check:"
-        echo "Python: $(python --version)"
-        echo "Chrome: $(google-chrome --version)"
-        echo "Working directory: $(pwd)"
-        echo "Files: $(ls -la)"
-        echo "Python path: $(which python)"
-    
-    - name: Run scraper
-      env:
-        MAX_PAGES: ${{ github.event.inputs.max_pages || '3' }}
-        MAX_JOBS: ${{ github.event.inputs.max_jobs || '50' }}
-        HEADLESS: ${{ github.event.inputs.headless || 'true' }}
-        CI: 'true'
-      run: |
-        echo "🚀 Starting scraper..."
-        echo "Settings: MAX_PAGES=${MAX_PAGES}, MAX_JOBS=${MAX_JOBS}, HEADLESS=${HEADLESS}"
-        
-        # Run with xvfb for virtual display
-        xvfb-run -a --server-args="-screen 0 1920x1080x24" python indeed_full_details_scraper.py
-        
-        echo "✅ Scraper completed"
-    
-    - name: List generated files
-      if: always()
-      run: |
-        echo "📁 Generated files:"
-        ls -lh *.json *.csv 2>/dev/null || echo "No JSON/CSV files found"
-        ls -lh debug_*.png debug_*.html 2>/dev/null || echo "No debug files"
-    
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: scraper-results-${{ github.run_number }}
-        path: |
-          *.json
-          *.csv
-          debug_*.png
-          debug_*.html
-        retention-days: 30
-        if-no-files-found: warn
-    
-    - name: Commit results to repository
-      if: success()
-      run: |
-        echo "💾 Committing results..."
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        
-        # Create data directory
-        mkdir -p data
-        
-        # Move results
-        mv indeed_cr_jobs_*.json data/ 2>/dev/null || echo "No JSON to move"
-        mv indeed_cr_jobs_*.csv data/ 2>/dev/null || echo "No CSV to move"
-        
-        # Check for changes
-        if [ -n "$(git status --porcelain data/)" ]; then
-          git add data/
-          git commit -m "🤖 Update scraped jobs - $(date +'%Y-%m-%d %H:%M:%S UTC')"
-          git push
-          echo "✅ Results committed and pushed"
-        else
-          echo "ℹ️  No new data to commit"
-        fi
-      continue-on-error: true
-    
-    - name: Create job summary
-      if: always()
-      run: |
-        echo "## 📊 Scraper Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Run Details:**" >> $GITHUB_STEP_SUMMARY
-        echo "- Date: $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-        echo "- Max Pages: ${{ github.event.inputs.max_pages || '3' }}" >> $GITHUB_STEP_SUMMARY
-        echo "- Max Jobs: ${{ github.event.inputs.max_jobs || '50' }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Count files
-        JSON_COUNT=$(ls -1 *.json 2>/dev/null | wc -l)
-        CSV_COUNT=$(ls -1 *.csv 2>/dev/null | wc -l)
-        
-        if [ $JSON_COUNT -gt 0 ] || [ $CSV_COUNT -gt 0 ]; then
-          echo "**✅ Success!**" >> $GITHUB_STEP_SUMMARY
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            wget \
+            gnupg \
+            unzip \
+            xvfb \
+            libxi6 \
+            libgconf-2-4 \
+            libnss3 \
+            libxss1 \
+            libasound2 \
+            libgdk-pixbuf2.0-0 \
+            libgtk-3-0 \
+            libxshmfence1
+      
+      - name: Install Chrome
+        run: |
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install selenium undetected-chromedriver webdriver-manager
+      
+      - name: Run scraper
+        run: |
+          xvfb-run -a python indeed_full_details_scraper.py
+        env:
+          DISPLAY: ':99'
+      
+      - name: Upload results as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: indeed-jobs-${{ github.run_number }}
+          path: |
+            indeed_cr_jobs_*.json
+            indeed_cr_jobs_*.csv
+          retention-days: 30
+      
+      - name: Commit and push results (optional)
+        if: success()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add indeed_cr_jobs_*.json indeed_cr_jobs_*.csv || true
+          git diff --staged --quiet || git commit -m "Update job listings - $(date +'%Y-%m-%d %H:%M:%S')"
+          git push || true
+        continue-on-error: true
+      
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 📊 Scraper Run Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- JSON files: $JSON_COUNT" >> $GITHUB_STEP_SUMMARY
-          echo "- CSV files: $CSV_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ $JSON_COUNT -gt 0 ]; then
-            echo "### 📄 Generated Files" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            ls -lh *.json *.csv 2>/dev/null >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          if [ -f indeed_cr_jobs_*.json ]; then
+            JOB_COUNT=$(cat indeed_cr_jobs_*.json | grep -o '"_job_title"' | wc -l)
+            echo "**Jobs Scraped:** $JOB_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Scraping completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ No job data found" >> $GITHUB_STEP_SUMMARY
           fi
-        else
-          echo "**❌ No files generated**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Check the logs for errors. Debug files may be available in artifacts." >> $GITHUB_STEP_SUMMARY
-        fi
-    
-    - name: Notify on failure
-      if: failure()
-      run: |
-        echo "❌ Scraper failed!"
-        echo "Check the action logs and debug artifacts for details."
-        exit 1
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Scraper failed" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs for details" >> $GITHUB_STEP_SUMMARY

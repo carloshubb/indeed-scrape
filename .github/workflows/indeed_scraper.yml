@@ -1,4 +1,4 @@
-name: Weekly Indeed Scraper
+name: Weekly Indeed Scraper (Self-Hosted + Undetected ChromeDriver)
 
 on:
   schedule:
@@ -7,88 +7,66 @@ on:
 
 jobs:
   scrape-indeed:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # IMPORTANT: run on your own machine (Windows/Linux)
+    timeout-minutes: 60
 
     steps:
-      # 1. Checkout repository
+      # 1️⃣ Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Python
+      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 3. Install dependencies
-      - name: Install Python dependencies
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install selenium webdriver-manager
+          pip install selenium undetected-chromedriver webdriver-manager
 
-      # 4. Install Google Chrome and matching ChromeDriver
-      - name: Install Google Chrome and ChromeDriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip xvfb
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
-          CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-          echo "Chrome version: $CHROME_VERSION"
-          LATEST_DRIVER=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_$CHROME_VERSION")
-          wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${LATEST_DRIVER}/linux64/chromedriver-linux64.zip"
-          unzip chromedriver-linux64.zip
-          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
-          chromedriver --version
-
-      # 5. Run scraper in headless mode
-      - name: Run Indeed scraper
+      # 4️⃣ Run the Indeed scraper
+      - name: Run Indeed scraper (Headless)
         env:
           PYTHONUNBUFFERED: 1
         run: |
           python - <<'EOF'
-          from selenium import webdriver
-          from selenium.webdriver.chrome.options import Options
           from indeed_full_details_scraper import IndeedFullDetailsScraper
           from datetime import datetime
 
-          # Override the scraper to force headless Chrome
-          class CIIndeedScraper(IndeedFullDetailsScraper):
-              def __init__(self):
-                  options = Options()
-                  options.add_argument('--headless=new')
-                  options.add_argument('--no-sandbox')
-                  options.add_argument('--disable-dev-shm-usage')
-                  options.add_argument('--disable-gpu')
-                  options.add_argument('--window-size=1920,1080')
-                  self.driver = webdriver.Chrome(options=options)
-                  self.driver.set_page_load_timeout(30)
-                  from selenium.webdriver.support.ui import WebDriverWait
-                  self.wait = WebDriverWait(self.driver, 10)
-
-          print("🚀 Running Indeed Scraper (Headless Mode on GitHub)...")
+          print("🚀 Starting Indeed Scraper (self-hosted, undetected Chrome)...")
 
           search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
-          scraper = CIIndeedScraper()
-          jobs = scraper.scrape_jobs(search_url, max_pages=3, extract_full_details=True)
+          scraper = IndeedFullDetailsScraper(headless=True)  # Headless Chrome for CI
 
-          timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-          csv_file = f'indeed_cr_jobs_{timestamp}.csv'
-          json_file = f'indeed_cr_jobs_{timestamp}.json'
+          jobs = scraper.scrape_jobs(
+              search_url=search_url,
+              max_pages=3,
+              max_jobs=None,
+              extract_full_details=True
+          )
 
-          scraper.save_to_csv(jobs, csv_file)
-          scraper.save_to_json(jobs, json_file)
+          if jobs:
+              timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+              csv_file = f'indeed_cr_jobs_{timestamp}.csv'
+              json_file = f'indeed_cr_jobs_{timestamp}.json'
+
+              scraper.save_to_csv(jobs, csv_file)
+              scraper.save_to_json(jobs, json_file)
+              print(f"✅ Scraped {len(jobs)} jobs successfully!")
+          else:
+              print("⚠️ No jobs scraped.")
+
           scraper.close()
-          print("✅ Scrape complete!")
           EOF
 
-      # 6. Upload scraped results
-      - name: Upload results
+      # 5️⃣ Upload scraped results
+      - name: Upload scraped data
         uses: actions/upload-artifact@v4
         with:
           name: indeed-scraped-data
           path: |
             *.csv
             *.json
-`

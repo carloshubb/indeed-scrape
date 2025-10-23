@@ -1,0 +1,66 @@
+name: Weekly Indeed Scraper
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"   # Runs every Monday at 00:00 UTC
+  workflow_dispatch:        # Allows manual trigger from GitHub UI
+
+jobs:
+  scrape-indeed:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout your repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium undetected-chromedriver webdriver-manager
+
+      # 4. Install Google Chrome
+      - name: Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
+          google-chrome --version
+
+      # 5. Run the Indeed scraper in headless mode
+      - name: Run Indeed scraper
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          python - <<'EOF'
+          from indeed_full_details_scraper import IndeedFullDetailsScraper
+          from datetime import datetime
+
+          search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
+
+          scraper = IndeedFullDetailsScraper(headless=True)
+          jobs = scraper.scrape_jobs(search_url, max_pages=5, extract_full_details=True)
+          timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+          json_file = f'indeed_cr_jobs_{timestamp}.json'
+          csv_file = f'indeed_cr_jobs_{timestamp}.csv'
+          scraper.save_to_json(jobs, json_file)
+          scraper.save_to_csv(jobs, csv_file)
+          scraper.close()
+          EOF
+
+      # 6. Upload output files as artifacts
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: indeed-scraped-data
+          path: |
+            *.csv
+            *.json

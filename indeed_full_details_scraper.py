@@ -20,7 +20,7 @@ import re
 import warnings
 from datetime import datetime, timedelta
 
-now = datetime.now()
+
 default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
 # Suppress warnings
@@ -454,7 +454,7 @@ class IndeedFullDetailsScraper:
             '_job_description': None,
             '_job_category': None,
             '_job_type': None,
-            '_job_tag': [],
+            '_job_tag': 'Costa Rica',
             '_job_expiry_date': default_deadline,
             '_job_gender': None,
             '_job_apply_type': 'external',

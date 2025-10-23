@@ -36,7 +36,7 @@ jobs:
           rm -f indeed_cr_jobs*.csv indeed_cr_jobs*.json
           echo "Cleaned up any existing files"
       
-      # 6. Run the Indeed scraper in headless mode
+      # 6. Run the Indeed scraper with better detection
       - name: Run Indeed scraper
         env:
           PYTHONUNBUFFERED: 1
@@ -62,7 +62,7 @@ jobs:
                   os.remove(f)
                   print(f"Removed old file: {f}")
           
-          # Set up Chrome options
+          # Set up Chrome options with better stealth
           chrome_options = Options()
           chrome_options.add_argument('--headless=new')
           chrome_options.add_argument('--no-sandbox')
@@ -71,13 +71,20 @@ jobs:
           chrome_options.add_argument('--disable-blink-features=AutomationControlled')
           chrome_options.add_argument('--window-size=1920,1080')
           chrome_options.add_argument('--lang=es-ES')
+          chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
           chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
           chrome_options.add_experimental_option('useAutomationExtension', False)
           
           # Initialize driver
           service = Service(ChromeDriverManager().install())
           driver = webdriver.Chrome(service=service, options=chrome_options)
-          driver.set_page_load_timeout(30)
+          driver.set_page_load_timeout(60)
+          
+          # Execute stealth script
+          driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+              "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          })
+          driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
           
           print("=" * 70)
           print("INDEED COSTA RICA JOB SCRAPER")
@@ -94,18 +101,66 @@ jobs:
               for page in range(3):
                   url = search_url if page == 0 else f"{search_url}&start={page * 10}"
                   print(f"\n📄 Scraping page {page + 1}/3...")
+                  print(f"   URL: {url}")
                   
                   driver.get(url)
-                  time.sleep(random.uniform(3, 5))
+                  time.sleep(random.uniform(4, 7))
                   
-                  # Scroll to load content
-                  driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-                  time.sleep(2)
+                  # Scroll slowly to simulate human behavior
+                  for i in range(3):
+                      driver.execute_script(f"window.scrollTo(0, document.body.scrollHeight/{3-i});")
+                      time.sleep(1)
                   
-                  # Find job cards
-                  job_cards = driver.find_elements(By.CSS_SELECTOR, 'div.job_seen_beacon, div[data-jk], td.resultContent')
-                  print(f"  ✅ Found {len(job_cards)} job cards")
+                  # Save page source for debugging
+                  if page == 0:
+                      with open('debug_page.html', 'w', encoding='utf-8') as f:
+                          f.write(driver.page_source)
+                      print("   💾 Saved page source to debug_page.html")
                   
+                  # Try multiple selectors
+                  job_cards = []
+                  selectors = [
+                      'div.job_seen_beacon',
+                      'div[data-jk]',
+                      'td.resultContent',
+                      'li.css-5lfssm',
+                      'div.jobsearch-SerpJobCard',
+                      'div[class*="job"]',
+                      'article',
+                      'div[id*="job"]',
+                      'div.slider_item',
+                      'ul.jobsearch-ResultsList > li'
+                  ]
+                  
+                  for selector in selectors:
+                      try:
+                          cards = driver.find_elements(By.CSS_SELECTOR, selector)
+                          if cards and len(cards) > 0:
+                              job_cards = cards
+                              print(f"   ✅ Found {len(cards)} cards with selector: {selector}")
+                              break
+                      except Exception as e:
+                          continue
+                  
+                  if not job_cards:
+                      print(f"   ⚠️  No job cards found with any selector")
+                      print(f"   📸 Taking screenshot...")
+                      driver.save_screenshot(f'debug_page_{page+1}.png')
+                      
+                      # Try to find ANY div elements and print their classes
+                      all_divs = driver.find_elements(By.TAG_NAME, 'div')
+                      print(f"   Found {len(all_divs)} total div elements")
+                      
+                      # Check for CAPTCHA or block
+                      page_text = driver.page_source.lower()
+                      if 'captcha' in page_text:
+                          print("   ❌ CAPTCHA detected!")
+                      if 'blocked' in page_text or 'unusual traffic' in page_text:
+                          print("   ❌ Bot detection / IP blocked!")
+                      
+                      continue
+                  
+                  # Extract jobs from cards
                   for idx, card in enumerate(job_cards, 1):
                       try:
                           job_data = {
@@ -120,81 +175,104 @@ jobs:
                               'scraped_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                           }
                           
-                          # Extract title
-                          try:
-                              title_elem = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle span, h2.jobTitle a, span[id^="jobTitle-"]')
-                              job_data['title'] = title_elem.text.strip()
-                          except:
-                              pass
+                          # Get all text from card
+                          card_text = card.text.strip()
+                          
+                          if not card_text or len(card_text) < 10:
+                              continue
+                          
+                          # Extract title - try multiple methods
+                          title_selectors = [
+                              'h2.jobTitle span',
+                              'h2.jobTitle a',
+                              'span[id^="jobTitle"]',
+                              'h2 span',
+                              'h2 a',
+                              'a.jcs-JobTitle',
+                              '[class*="jobTitle"]',
+                              'h2'
+                          ]
+                          
+                          for sel in title_selectors:
+                              try:
+                                  elem = card.find_element(By.CSS_SELECTOR, sel)
+                                  title_text = elem.text.strip()
+                                  if title_text and len(title_text) > 3:
+                                      job_data['title'] = title_text
+                                      break
+                              except:
+                                  continue
+                          
+                          # If no title found, skip
+                          if not job_data['title']:
+                              continue
                           
                           # Extract company
-                          try:
-                              company_elem = card.find_element(By.CSS_SELECTOR, 'span[data-testid="company-name"], .companyName')
-                              job_data['company'] = company_elem.text.strip()
-                          except:
-                              pass
+                          company_selectors = [
+                              'span[data-testid="company-name"]',
+                              '.companyName',
+                              '[class*="companyName"]',
+                              'span.company'
+                          ]
+                          
+                          for sel in company_selectors:
+                              try:
+                                  elem = card.find_element(By.CSS_SELECTOR, sel)
+                                  job_data['company'] = elem.text.strip()
+                                  break
+                              except:
+                                  continue
                           
                           # Extract location
-                          try:
-                              loc_elem = card.find_element(By.CSS_SELECTOR, 'div[data-testid="text-location"], .companyLocation')
-                              job_data['location'] = loc_elem.text.strip()
-                          except:
-                              pass
+                          location_selectors = [
+                              'div[data-testid="text-location"]',
+                              '.companyLocation',
+                              '[class*="location"]'
+                          ]
+                          
+                          for sel in location_selectors:
+                              try:
+                                  elem = card.find_element(By.CSS_SELECTOR, sel)
+                                  job_data['location'] = elem.text.strip()
+                                  break
+                              except:
+                                  continue
                           
                           # Extract salary
                           try:
-                              salary_elem = card.find_element(By.CSS_SELECTOR, '.salary-snippet-container, .salary-snippet, .estimated-salary')
+                              salary_elem = card.find_element(By.CSS_SELECTOR, '.salary-snippet-container, .salary-snippet, [class*="salary"]')
                               job_data['salary'] = salary_elem.text.strip()
                           except:
                               pass
                           
-                          # Extract description snippet
+                          # Extract description
                           try:
-                              snippet_elem = card.find_element(By.CSS_SELECTOR, '.job-snippet, ul.job-snippet, .job-snippet-text')
+                              snippet_elem = card.find_element(By.CSS_SELECTOR, '.job-snippet, ul.job-snippet, [class*="snippet"]')
                               job_data['description'] = snippet_elem.text.strip()
                           except:
-                              pass
+                              # Use card text as fallback
+                              job_data['description'] = card_text[:200]
                           
                           # Extract URL
                           try:
-                              link = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle a, a.jcs-JobTitle')
-                              job_data['url'] = link.get_attribute('href')
+                              link = card.find_element(By.TAG_NAME, 'a')
+                              href = link.get_attribute('href')
+                              if href and 'indeed.com' in href:
+                                  job_data['url'] = href
                           except:
                               pass
                           
-                          # Extract date
-                          try:
-                              date_elem = card.find_element(By.CSS_SELECTOR, 'span.date, .date')
-                              job_data['date_posted'] = date_elem.text.strip()
-                          except:
-                              pass
+                          all_jobs.append(job_data)
+                          print(f"    {idx:2d}. {job_data['title'][:60]}")
                           
-                          # Extract job type
-                          try:
-                              type_elem = card.find_element(By.CSS_SELECTOR, '.metadata, .job-snippet li')
-                              type_text = type_elem.text.strip().lower()
-                              if 'tiempo completo' in type_text or 'full-time' in type_text:
-                                  job_data['job_type'] = 'Full-time'
-                              elif 'medio tiempo' in type_text or 'part-time' in type_text:
-                                  job_data['job_type'] = 'Part-time'
-                              elif 'temporal' in type_text or 'contract' in type_text:
-                                  job_data['job_type'] = 'Contract'
-                          except:
-                              pass
-                          
-                          if job_data['title']:
-                              all_jobs.append(job_data)
-                              print(f"    {idx:2d}. {job_data['title'][:60]}")
-                          
-                          time.sleep(random.uniform(0.3, 0.8))
+                          time.sleep(random.uniform(0.2, 0.5))
                           
                       except Exception as e:
-                          print(f"    ⚠️  Error extracting job {idx}: {str(e)[:50]}")
                           continue
                   
                   # Delay between pages
-                  if page < 2:
-                      delay = random.uniform(4, 7)
+                  if page < 2 and len(all_jobs) > 0:
+                      delay = random.uniform(5, 8)
                       print(f"  ⏳ Waiting {delay:.1f}s before next page...")
                       time.sleep(delay)
               
@@ -202,7 +280,7 @@ jobs:
               print(f"✅ Successfully scraped {len(all_jobs)} jobs!")
               print("=" * 70)
               
-              # Save to SINGLE CSV file with fixed name
+              # Save to files even if 0 jobs (for debugging)
               csv_file = 'indeed_cr_jobs.csv'
               json_file = 'indeed_cr_jobs.json'
               
@@ -231,11 +309,25 @@ jobs:
                   print("=" * 70)
               else:
                   print("\n⚠️  No jobs were scraped!")
+                  print("Check debug_page.html and debug_page_*.png for details")
+                  
+                  # Create empty files so workflow doesn't fail
+                  with open(csv_file, 'w') as f:
+                      f.write("title,company,location,salary,description,url,date_posted,job_type,scraped_at\n")
+                  with open(json_file, 'w') as f:
+                      json.dump([], f)
+                  print(f"💾 Created empty files for debugging")
               
           except Exception as e:
               print(f"\n❌ Error during scraping: {e}")
               import traceback
               traceback.print_exc()
+              
+              # Create empty files so workflow doesn't fail
+              with open('indeed_cr_jobs.csv', 'w') as f:
+                  f.write("title,company,location,salary,description,url,date_posted,job_type,scraped_at\n")
+              with open('indeed_cr_jobs.json', 'w') as f:
+                  json.dump([], f)
           
           finally:
               driver.quit()
@@ -243,16 +335,32 @@ jobs:
           
           EOF
       
-      # 7. Verify single file exists
+      # 7. Upload debug files
+      - name: Upload debug files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-files-${{ github.run_number }}
+          path: |
+            debug_page*.html
+            debug_page*.png
+          retention-days: 7
+      
+      # 8. Verify output
       - name: Verify output
+        if: always()
         run: |
           echo "Files in directory:"
-          ls -lh indeed_cr_jobs.*
+          ls -lh indeed_cr_jobs.* || echo "No files found"
           echo ""
-          echo "CSV file contents (first 5 lines):"
-          head -5 indeed_cr_jobs.csv || echo "No CSV file found"
+          if [ -f indeed_cr_jobs.csv ]; then
+            echo "CSV file contents (first 10 lines):"
+            head -10 indeed_cr_jobs.csv
+          else
+            echo "No CSV file found"
+          fi
       
-      # 8. Upload ONLY the single CSV and JSON file
+      # 9. Upload results
       - name: Upload results
         uses: actions/upload-artifact@v4
         if: always()

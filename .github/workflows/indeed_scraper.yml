@@ -1,125 +1,83 @@
-name: Scrape Indeed Costa Rica Jobs
+name: Weekly Indeed Scraper (Hosted Runner Compatible)
 
 on:
-  workflow_dispatch:  # Manual trigger
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours (adjust as needed)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  scrape-indeed:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
+    timeout-minutes: 60
+
     steps:
-      - name: 📥 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: 🐍 Set up Python
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
-      
-      - name: 📦 Install dependencies
+          python-version: "3.10"
+
+      - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install selenium webdriver-manager
-      
-      - name: 🌐 Set up Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
-      
-      - name: 🔍 Install ChromeDriver
+
+      - name: Install Chrome & ChromeDriver
         run: |
-          pip install webdriver-manager
-      
-      - name: 🤖 Run Indeed scraper
-        id: scrape
-        continue-on-error: true  # Don't fail workflow if scraping fails
-        run: |
-          python indeed_ci_scraper.py
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
+          google-chrome --version
+          wget https://chromedriver.storage.googleapis.com/$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
+
+      - name: Run Indeed scraper
         env:
-          CI: true
-          GITHUB_ACTIONS: true
-      
-      - name: 📊 Check scrape results
+          PYTHONUNBUFFERED: 1
         run: |
-          if [ -f indeed_cr_jobs_*.csv ]; then
-            echo "✅ CSV file created"
-            ls -lh indeed_cr_jobs_*.csv
-            echo "📝 Job count:"
-            tail -n +2 indeed_cr_jobs_*.csv | wc -l
-          else
-            echo "⚠️ No CSV file found"
-          fi
-      
-      - name: 📤 Upload scraped data
-        if: always()  # Upload even if scraping failed
+          python - <<'EOF'
+          from selenium import webdriver
+          from selenium.webdriver.chrome.service import Service
+          from selenium.webdriver.chrome.options import Options
+          from indeed_full_details_scraper import IndeedFullDetailsScraper
+          from datetime import datetime
+
+          print("🚀 Running Indeed Scraper in Headless Mode...")
+
+          # Force Selenium to use normal ChromeDriver
+          options = Options()
+          options.add_argument("--headless=new")
+          options.add_argument("--no-sandbox")
+          options.add_argument("--disable-dev-shm-usage")
+          options.add_argument("--window-size=1920,1080")
+
+          # Monkey-patch to skip undetected-chromedriver
+          import indeed_full_details_scraper
+          indeed_full_details_scraper.uc.Chrome = lambda options=None: webdriver.Chrome(options=options)
+
+          scraper = IndeedFullDetailsScraper(headless=True)
+          jobs = scraper.scrape_jobs("https://cr.indeed.com/jobs?q=&l=costa+rica", max_pages=3, extract_full_details=True)
+
+          timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+          csv_file = f'indeed_cr_jobs_{timestamp}.csv'
+          json_file = f'indeed_cr_jobs_{timestamp}.json'
+
+          scraper.save_to_csv(jobs, csv_file)
+          scraper.save_to_json(jobs, json_file)
+          scraper.close()
+          print("✅ Scraping complete!")
+          EOF
+
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: indeed-jobs-${{ github.run_number }}
+          name: indeed-scraped-data
           path: |
-            indeed_cr_jobs_*.csv
-            indeed_cr_jobs_*.json
-            indeed_scraper.log
-            *.png
-            *.html
-          retention-days: 30
-      
-      - name: 💾 Commit and push results
-        if: success()  # Only commit if scraping succeeded
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          # Move files to data directory
-          mkdir -p data
-          mv indeed_cr_jobs_*.csv data/ 2>/dev/null || true
-          mv indeed_cr_jobs_*.json data/ 2>/dev/null || true
-          
-          # Add and commit
-          git add data/
-          
-          if git diff --staged --quiet; then
-            echo "📭 No changes to commit"
-          else
-            git commit -m "🤖 Update jobs data - $(date +'%Y-%m-%d %H:%M:%S')"
-            git push
-            echo "✅ Changes pushed"
-          fi
-      
-      - name: 📝 Summary
-        if: always()
-        run: |
-          echo "## 📊 Scrape Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f indeed_cr_jobs_*.csv ]; then
-            JOB_COUNT=$(tail -n +2 indeed_cr_jobs_*.csv | wc -l)
-            echo "✅ **Jobs scraped:** $JOB_COUNT" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Status:** No jobs scraped (likely blocked by Cloudflare)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 🛠️ Recommendations:" >> $GITHUB_STEP_SUMMARY
-            echo "- Consider using undetected-chromedriver" >> $GITHUB_STEP_SUMMARY
-            echo "- Try running with Playwright" >> $GITHUB_STEP_SUMMARY
-            echo "- Use Indeed's RSS feed instead" >> $GITHUB_STEP_SUMMARY
-            echo "- Add proxy rotation" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🕐 **Run time:** $(date)" >> $GITHUB_STEP_SUMMARY
-
-  # Optional: Send notification on failure
-  notify-failure:
-    runs-on: ubuntu-latest
-    needs: scrape
-    if: failure()
-    steps:
-      - name: 📧 Send notification
-        run: |
-          echo "Scraping failed - check artifacts for debug files"
-          # Add email/Slack notification here if needed
+            *.csv
+            *.json

@@ -1,105 +1,73 @@
-name: Indeed Costa Rica Job Scraper
-
+name: Weekly Indeed Scraper
 on:
   schedule:
-    # Run daily at 2 AM UTC (adjust timezone as needed)
-    - cron: '0 2 * * *'
-  workflow_dispatch: # Allow manual trigger
-  push:
-    branches:
-      - main
-    paths:
-      - 'indeed_full_details_scraper.py'
-      - '.github/workflows/indeed-scraper.yml'
+    - cron: "0 0 * * 1"   # Runs every Monday at 00:00 UTC
+  workflow_dispatch:        # Allows manual trigger from GitHub UI
 
 jobs:
-  scrape-jobs:
+  scrape-indeed:
     runs-on: ubuntu-latest
-    
     steps:
+      # 1. Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # 2. Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.10"
       
-      - name: Install system dependencies
+      # 3. Install dependencies
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            wget \
-            gnupg \
-            unzip \
-            xvfb \
-            libxi6 \
-            libgconf-2-4 \
-            libnss3 \
-            libxss1 \
-            libasound2 \
-            libgdk-pixbuf2.0-0 \
-            libgtk-3-0 \
-            libxshmfence1
-      
-      - name: Install Chrome
-        run: |
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-      
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install selenium undetected-chromedriver webdriver-manager
       
-      - name: Run scraper
+      # 4. Install Google Chrome
+      - name: Install Google Chrome
         run: |
-          xvfb-run -a python indeed_full_details_scraper.py
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
+          google-chrome --version
+      
+      # 5. Run the Indeed scraper in headless mode
+      # 5. Run the Indeed scraper in headless mode
+      - name: Run Indeed scraper
         env:
-          DISPLAY: ':99'
-      
-      - name: Upload results as artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: indeed-jobs-${{ github.run_number }}
-          path: |
-            indeed_cr_jobs_*.json
-            indeed_cr_jobs_*.csv
-          retention-days: 30
-      
-      - name: Commit and push results (optional)
-        if: success()
+          PYTHONUNBUFFERED: 1
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add indeed_cr_jobs_*.json indeed_cr_jobs_*.csv || true
-          git diff --staged --quiet || git commit -m "Update job listings - $(date +'%Y-%m-%d %H:%M:%S')"
-          git push || true
-        continue-on-error: true
-      
-      - name: Create summary
-        if: always()
-        run: |
-          echo "## 📊 Scraper Run Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Date:** $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          python - <<'EOF'
+          from indeed_full_details_scraper import IndeedFullDetailsScraper
           
-          if [ -f indeed_cr_jobs_*.json ]; then
-            JOB_COUNT=$(cat indeed_cr_jobs_*.json | grep -o '"_job_title"' | wc -l)
-            echo "**Jobs Scraped:** $JOB_COUNT" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ Scraping completed successfully" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ No job data found" >> $GITHUB_STEP_SUMMARY
-          fi
+          print("Starting Indeed scraper...")
+          search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
+          scraper = IndeedFullDetailsScraper(headless=True)
+          
+          try:
+              jobs = scraper.scrape_jobs(search_url, max_pages=5, extract_full_details=True)
+              
+              # Fixed filenames - no timestamp
+              json_file = 'indeed_cr_jobs_latest.json'
+              csv_file = 'indeed_cr_jobs_latest.csv'
+              
+              print(f"Saving {len(jobs)} jobs...")
+              scraper.save_to_json(jobs, json_file)
+              scraper.save_to_csv(jobs, csv_file)
+              print("Save complete!")
+              
+          finally:
+              scraper.close()
+              print("Scraper closed.")
+          EOF
       
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ Scraper failed" >> $GITHUB_STEP_SUMMARY
-          echo "Check the logs for details" >> $GITHUB_STEP_SUMMARY
+      # 6. Upload output files as artifacts
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: indeed-scraped-data
+          path: |
+            indeed_cr_jobs_latest.csv
+            indeed_cr_jobs_latest.json

@@ -46,7 +46,7 @@ jobs:
 
           search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
 
-          scraper = IndeedFullDetailsScraper(headless=false)
+          scraper = IndeedFullDetailsScraper(headless=True)
           jobs = scraper.scrape_jobs(search_url, max_pages=5, extract_full_details=True)
           timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
           json_file = f'indeed_cr_jobs_{timestamp}.json'

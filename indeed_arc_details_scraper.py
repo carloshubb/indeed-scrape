@@ -521,29 +521,45 @@ class IndeedFullDetailsScraper:
 # -------------------------
 def main():
     search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP"
-    scraper = IndeedFullDetailsScraper(headless=False)
+
+    # Force headless mode for GitHub Actions or servers
+    scraper = IndeedFullDetailsScraper(headless=True)
 
     async def arun():
         try:
-            await scraper.start(start_url=search_url)
-            jobs = await scraper.scrape_jobs(search_url, max_pages=3, max_jobs=None, extract_full_details=True)
+            try:
+                await scraper.start(start_url=search_url)
+            except Exception as e:
+                print(f"⚠️ Browser start failed: {e}. Retrying once...")
+                await asyncio.sleep(5)
+                await scraper.close()
+                await scraper.start(start_url=search_url)
+
+            jobs = await scraper.scrape_jobs(
+                search_url,
+                max_pages=3,
+                max_jobs=None,
+                extract_full_details=True,
+            )
+
             if jobs:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 json_fn = f"indeed_cr_jobs_{timestamp}.json"
                 csv_fn = f"indeed_cr_jobs_{timestamp}.csv"
                 scraper.save_to_json(jobs, json_fn)
                 scraper.save_to_csv(jobs, csv_fn)
-
                 print(f"\n✅ Scraped {len(jobs)} jobs. Files: {json_fn}, {csv_fn}")
             else:
                 print("\n❌ No jobs scraped — check debug files.")
+        except Exception as e:
+            print(f"🔥 Fatal error during scrape: {e}")
         finally:
-            await scraper.close()
-            print("\n🔒 Browser closed.")
+            try:
+                await scraper.close()
+            except Exception as e:
+                print(f"⚠️ Error closing browser: {e}")
+            print("\n🔒 Browser closed.\n✅ Done!")
 
-    # nodriver provides a loop() helper which you used before — use it to run the async code
     nd.loop().run_until_complete(arun())
-
-
 if __name__ == "__main__":
     main()

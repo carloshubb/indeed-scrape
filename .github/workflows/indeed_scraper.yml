@@ -1,10 +1,12 @@
-name: Weekly Indeed Scraper
+name: Run Indeed Scraper
 
 on:
+  workflow_dispatch:
   schedule:
-    # Runs every Monday at 09:00 UTC (adjust as needed)
-    - cron: "0 9 * * 1"
-  workflow_dispatch:  # allow manual trigger from GitHub UI
+    - cron: "0 6 * * *"
+  push:
+    branches:
+      - main
 
 jobs:
   scrape:
@@ -17,22 +19,36 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install nodriver beautifulsoup4 lxml
 
-      - name: Run Indeed scraper
+      - name: Run Indeed scraper (headless + no sandbox)
+        env:
+          NO_SANDBOX: "1"
         run: |
-          python indeed_arc_details_scraper.py
+          python - <<'EOF'
+          import indeed_arc_details_scraper as mod
+          import nodriver as nd
+          mod.nd.start = lambda *a, **kw: nd.start(no_sandbox=True)
+          mod.main()
+          EOF
+
+      - name: Keep only one latest output file
+        run: |
+          latest_json=$(ls -t indeed_cr_jobs_*.json 2>/dev/null | head -n 1)
+          latest_csv=$(ls -t indeed_cr_jobs_*.csv 2>/dev/null | head -n 1)
+          if [ -n "$latest_json" ]; then mv "$latest_json" indeed_jobs.json; fi
+          if [ -n "$latest_csv" ]; then mv "$latest_csv" indeed_jobs.csv; fi
+          rm -f indeed_cr_jobs_*.json indeed_cr_jobs_*.csv 2>/dev/null || true
 
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: indeed-scrape-results
+          name: indeed-scraped-data
           path: |
-            *.csv
-            *.json
-            debug_page_*.html
+            indeed_jobs.json
+            indeed_jobs.csv

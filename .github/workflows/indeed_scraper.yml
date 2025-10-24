@@ -3,7 +3,7 @@ name: Indeed Job Scraper
 on:
   schedule:
     # Run every day at 9 AM UTC (adjust to your timezone)
-    - cron: '0 9 * * *'
+    - cron: '0 9 * * 1'
   
   workflow_dispatch:  # Allow manual trigger from GitHub Actions tab
     inputs:
@@ -35,7 +35,23 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt-get update
+    sudo apt-get install -y \
+      libasound2t64 \
+      libnss3 \
+      libxss1 \
+      libatk1.0-0 \
+      libatk-bridge2.0-0 \
+      libcups2 \
+      libdrm2 \
+      libxkbcommon0 \
+      libxdamage1 \
+      libxrandr2 \
+      libgbm1 \
+      libxcomposite1 \
+      libxshmfence1 \
+      libpango-1.0-0 \
+      libcairo2
           wget \
           unzip \
           libglib2.0-0 \

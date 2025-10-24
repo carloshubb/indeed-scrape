@@ -11,16 +11,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ---------------------------------------------------------
+      # 1. Checkout your repository
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ---------------------------------------------------------
+      # 2. Set up Python
+      # ---------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
       # ---------------------------------------------------------
-      # Install required system packages for Chrome on Ubuntu 24.04
+      # 3. Install all required system packages for Chrome
       # ---------------------------------------------------------
       - name: Install system dependencies
         run: |
@@ -44,7 +50,7 @@ jobs:
             xvfb wget unzip curl jq
 
       # ---------------------------------------------------------
-      # Install Chrome and auto-match ChromeDriver version
+      # 4. Install Chrome and matching ChromeDriver automatically
       # ---------------------------------------------------------
       - name: Install Google Chrome and matching ChromeDriver
         run: |
@@ -60,7 +66,6 @@ jobs:
           DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | \
             jq -r --arg ver "$CHROME_MAJOR" '.versions[] | select(.version | startswith($ver + ".")) | .version' | head -1)
 
-          echo "Installing ChromeDriver $DRIVER_VERSION"
           DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | \
             jq -r --arg ver "$DRIVER_VERSION" '.versions[] | select(.version==$ver) | .downloads.chromedriver[] | select(.platform=="linux64") | .url')
 
@@ -71,7 +76,7 @@ jobs:
           chromedriver --version
 
       # ---------------------------------------------------------
-      # Install Python dependencies
+      # 5. Install Python dependencies
       # ---------------------------------------------------------
       - name: Install Python dependencies
         run: |
@@ -79,17 +84,19 @@ jobs:
           pip install -r requirements.txt
 
       # ---------------------------------------------------------
-      # Run scraper with virtual display
+      # 6. Run scraper in old headless mode (without editing Python)
       # ---------------------------------------------------------
       - name: Run Indeed Scraper
         run: |
-          xvfb-run --auto-servernum python indeed_full_details_scraper.py
+          echo "Starting Indeed scraper with old headless mode..."
+          export CHROME_ARGS="--headless=old --no-sandbox --disable-gpu --disable-dev-shm-usage"
+          xvfb-run --auto-servernum bash -c 'python indeed_full_details_scraper.py'
 
       # ---------------------------------------------------------
-      # Optional: Upload scrape results (e.g. CSV or JSON)
+      # 7. Upload scrape results (optional)
       # ---------------------------------------------------------
       - name: Upload results
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: indeed-scrape-results

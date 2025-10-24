@@ -20,9 +20,6 @@ import re
 import warnings
 from datetime import datetime, timedelta
 
-
-default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-# print(default_deadline)
 # Suppress warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -359,7 +356,6 @@ class IndeedFullDetailsScraper:
                         if loc_text and not job_data['_job_location']:
                             job_data['_job_location'] = loc_text
                             job_data['_job_address'] = loc_text
-                            job_data['_job_map_location'] = loc_text
                             break
                     except:
                         continue
@@ -454,7 +450,7 @@ class IndeedFullDetailsScraper:
             '_job_description': None,
             '_job_category': None,
             '_job_type': None,
-            '_job_tag': 'Costa Rica',
+            '_job_tag': [],
             '_job_expiry_date': None,
             '_job_gender': None,
             '_job_apply_type': 'external',
@@ -515,7 +511,6 @@ class IndeedFullDetailsScraper:
                     location_text = location_elem.text.strip()
                     job_data['_job_location'] = location_text
                     job_data['_job_address'] = location_text
-                    job_data['_job_map_location'] = location_text
                     break
                 except:
                     continue
@@ -766,7 +761,7 @@ def main():
     print()
     
     # Client's URL
-    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=8223ee513792bd50"
+    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=d182fba1685af283"
     
     scraper = None
     try:

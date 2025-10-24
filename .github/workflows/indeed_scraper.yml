@@ -67,11 +67,13 @@ jobs:
         pip install selenium undetected-chromedriver webdriver-manager
     
     - name: Run scraper
+      id: scraper
       env:
         MAX_PAGES: ${{ github.event.inputs.max_pages || '5' }}
         MAX_JOBS: ${{ github.event.inputs.max_jobs || '' }}
       run: |
         python indeed_full_details_scraper.py
+      continue-on-error: false
     
     - name: Get current date
       id: date

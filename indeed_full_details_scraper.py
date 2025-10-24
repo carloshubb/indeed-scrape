@@ -1,9 +1,6 @@
 """
-Indeed Costa Rica Complete Job Scraper with Full Details
-Updated version with _job_ prefix and category extraction
-
-Installation:
-pip install selenium undetected-chromedriver webdriver-manager
+Indeed Costa Rica Complete Job Scraper - FIXED VERSION
+With updated selectors and better error handling
 """
 
 import undetected_chromedriver as uc
@@ -20,7 +17,8 @@ import re
 import warnings
 from datetime import datetime, timedelta
 
-# Suppress warnings
+
+default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class IndeedFullDetailsScraper:
@@ -29,7 +27,7 @@ class IndeedFullDetailsScraper:
         options = uc.ChromeOptions()
         
         if headless:
-            options.add_argument('--headless')
+            options.add_argument('--headless=new')
         
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_argument('--disable-dev-shm-usage')
@@ -37,11 +35,12 @@ class IndeedFullDetailsScraper:
         options.add_argument('--disable-gpu')
         options.add_argument('--lang=es-ES')
         options.add_argument('--window-size=1920,1080')
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
         print("🚀 Initializing Chrome driver...")
         self.driver = uc.Chrome(options=options)
         self.driver.set_page_load_timeout(30)
-        self.wait = WebDriverWait(self.driver, 10)
+        self.wait = WebDriverWait(self.driver, 15)
         print("✅ Driver ready!\n")
     
     def extract_category(self, title, description):
@@ -51,100 +50,38 @@ class IndeedFullDetailsScraper:
         
         text = f"{title or ''} {description or ''}".lower()
         
-        # Define category keywords
         categories = {
             'IT/Software Development': [
                 'software', 'developer', 'programming', 'engineer', 'web', 'mobile',
                 'frontend', 'backend', 'fullstack', 'devops', 'cloud', 'java', 'python',
                 'javascript', 'react', 'angular', 'node', 'php', 'dotnet', '.net',
-                'desarrollo', 'programador', 'desarrollador', 'sistemas', 'typescript',
-                'ruby', 'golang', 'kotlin', 'swift', 'android', 'ios', 'data scientist'
+                'desarrollo', 'programador', 'desarrollador', 'sistemas', 'typescript'
             ],
             'Customer Service': [
                 'customer service', 'call center', 'support', 'help desk', 'servicio al cliente',
-                'atención al cliente', 'soporte', 'representante', 'agent', 'cliente',
-                'atención', 'contact center', 'bpo'
+                'atención al cliente', 'soporte', 'representante', 'agent', 'cliente'
             ],
             'Sales/Marketing': [
                 'sales', 'marketing', 'ventas', 'comercial', 'business development',
-                'account manager', 'vendedor', 'mercadeo', 'publicidad', 'digital marketing',
-                'seo', 'sem', 'social media', 'ecommerce', 'e-commerce', 'brand'
+                'account manager', 'vendedor', 'mercadeo', 'publicidad'
             ],
             'Finance/Accounting': [
                 'accountant', 'finance', 'accounting', 'contador', 'contabilidad', 'finanzas',
-                'auditor', 'financial', 'cpa', 'bookkeeper', 'payroll', 'tax', 'treasury',
-                'banking', 'banco', 'inversiones', 'budget'
+                'auditor', 'financial', 'cpa', 'bookkeeper'
             ],
             'Human Resources': [
                 'human resources', 'hr', 'recruiter', 'recursos humanos', 'reclutamiento',
-                'recruitment', 'talent', 'talento', 'hiring', 'payroll', 'compensation',
-                'benefits', 'culture', 'employee relations'
+                'recruitment', 'talent', 'talento'
             ],
             'Administrative': [
                 'administrative', 'assistant', 'secretary', 'office', 'receptionist',
-                'administrativo', 'asistente', 'secretaria', 'oficina', 'recepcionista',
-                'clerk', 'data entry', 'coordinator'
-            ],
-            'Healthcare': [
-                'nurse', 'doctor', 'medical', 'health', 'healthcare', 'enfermera',
-                'médico', 'salud', 'hospital', 'clinic', 'pharmacy', 'farmacia',
-                'dentist', 'therapist', 'caregiver'
-            ],
-            'Education/Training': [
-                'teacher', 'professor', 'education', 'training', 'instructor', 'tutor',
-                'maestro', 'profesor', 'educación', 'capacitación', 'formación',
-                'academic', 'learning', 'curriculum'
-            ],
-            'Engineering': [
-                'civil engineer', 'mechanical', 'electrical', 'industrial engineer',
-                'ingeniero', 'ingeniería', 'técnico', 'maintenance', 'mantenimiento',
-                'manufacturing engineer', 'quality engineer', 'process engineer'
-            ],
-            'Design/Creative': [
-                'designer', 'graphic', 'ux', 'ui', 'creative', 'diseñador', 'diseño',
-                'gráfico', 'creativo', 'photoshop', 'illustrator', 'figma', 'sketch',
-                'art director', 'visual', 'branding'
-            ],
-            'Logistics/Supply Chain': [
-                'logistics', 'supply chain', 'warehouse', 'inventory', 'logística',
-                'cadena de suministro', 'bodega', 'almacén', 'inventario', 'shipping',
-                'procurement', 'purchasing', 'distribution', 'freight'
+                'administrativo', 'asistente', 'secretaria'
             ],
             'Management': [
-                'manager', 'director', 'supervisor', 'lead', 'gerente', 'jefe',
-                'coordinador', 'coordinator', 'chief', 'head', 'vp', 'vice president',
-                'executive', 'ceo', 'cto', 'cfo'
-            ],
-            'Hospitality/Tourism': [
-                'hotel', 'restaurant', 'tourism', 'hospitality', 'chef', 'cook',
-                'turismo', 'hostelería', 'cocinero', 'camarero', 'waiter', 'bartender',
-                'front desk', 'housekeeping', 'concierge'
-            ],
-            'Legal': [
-                'lawyer', 'attorney', 'legal', 'abogado', 'jurídico', 'paralegal',
-                'compliance', 'contracts', 'litigation', 'corporate law'
-            ],
-            'Manufacturing/Production': [
-                'production', 'manufacturing', 'operator', 'assembly', 'fabrication',
-                'producción', 'manufactura', 'operador', 'ensamblaje', 'planta',
-                'factory', 'plant', 'cnc', 'machinist'
-            ],
-            'Data/Analytics': [
-                'data analyst', 'data science', 'analytics', 'business intelligence',
-                'bi', 'tableau', 'power bi', 'sql', 'database', 'big data',
-                'machine learning', 'estadística', 'análisis'
-            ],
-            'Quality Assurance': [
-                'qa', 'quality assurance', 'tester', 'testing', 'quality control',
-                'calidad', 'pruebas', 'qc', 'inspector'
-            ],
-            'Security': [
-                'security', 'seguridad', 'guard', 'vigilante', 'cybersecurity',
-                'information security', 'infosec', 'safety'
+                'manager', 'director', 'supervisor', 'lead', 'gerente', 'jefe'
             ]
         }
         
-        # Check each category
         for category, keywords in categories.items():
             for keyword in keywords:
                 if keyword in text:
@@ -172,21 +109,6 @@ class IndeedFullDetailsScraper:
                     date = datetime.now() - timedelta(days=num)
                 return date.strftime('%Y-%m-%d')
         
-        # Parse specific dates
-        months_map = {
-            'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
-            'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12,
-            'jan': 1, 'apr': 4, 'aug': 8, 'dec': 12
-        }
-        
-        for month_name, month_num in months_map.items():
-            if month_name in date_str:
-                parts = re.findall(r'\d+', date_str)
-                if len(parts) >= 1:
-                    day = int(parts[0])
-                    year = int(parts[1]) if len(parts) > 1 and len(parts[1]) == 4 else datetime.now().year
-                    return f"{year}-{month_num:02d}-{day:02d}"
-        
         return datetime.now().strftime('%Y-%m-%d')
     
     def extract_salary(self, text):
@@ -203,10 +125,8 @@ class IndeedFullDetailsScraper:
         
         if 'hora' in text_lower or 'hour' in text_lower or '/hr' in text_lower:
             salary_data['_job_salary_type'] = 'hourly'
-        elif 'año' in text_lower or 'year' in text_lower or 'anual' in text_lower or '/yr' in text_lower:
+        elif 'año' in text_lower or 'year' in text_lower or 'anual' in text_lower:
             salary_data['_job_salary_type'] = 'yearly'
-        elif 'mes' in text_lower or 'month' in text_lower or '/mo' in text_lower:
-            salary_data['_job_salary_type'] = 'monthly'
         
         numbers = re.findall(r'[\d,]+(?:\.\d{2})?', text)
         if numbers:
@@ -218,24 +138,21 @@ class IndeedFullDetailsScraper:
         return salary_data
     
     def extract_experience_from_text(self, text):
-        """Extract experience requirements from text"""
+        """Extract experience requirements"""
         if not text:
             return None, None
         
         text_lower = text.lower()
         
-        # Look for experience patterns
         exp_patterns = [
             r'(\d+)\+?\s*(años?|years?)\s*(?:de\s*)?(?:experiencia|experience)',
-            r'(?:experiencia|experience)\s*(?:de\s*)?(\d+)\+?\s*(años?|years?)',
-            r'(\d+)\s*-\s*(\d+)\s*(años?|years?)',
+            r'(?:experiencia|experience)\s*(?:de\s*)?(\d+)\+?\s*(años?|years?)'
         ]
         
         for pattern in exp_patterns:
             match = re.search(pattern, text_lower)
             if match:
                 years = int(match.group(1))
-                
                 if years >= 7:
                     return f"{years}+ years", 'senior'
                 elif years >= 3:
@@ -245,202 +162,143 @@ class IndeedFullDetailsScraper:
                 else:
                     return f"{years} years", 'entry'
         
-        # Check for keywords
-        if any(word in text_lower for word in ['senior', 'sr.', 'lead', 'principal']):
+        if any(word in text_lower for word in ['senior', 'sr.', 'lead']):
             return '5+ years', 'senior'
-        elif any(word in text_lower for word in ['junior', 'jr.', 'entry level', 'entry-level', 'sin experiencia']):
+        elif any(word in text_lower for word in ['junior', 'jr.', 'entry']):
             return '0-2 years', 'entry'
-        elif any(word in text_lower for word in ['mid', 'intermediate', 'intermedio']):
-            return '2-5 years', 'mid'
         
         return None, None
     
     def extract_qualification(self, text):
-        """Extract education qualification from text"""
+        """Extract education qualification"""
         if not text:
             return None
         
         text_lower = text.lower()
         
-        if any(word in text_lower for word in ['phd', 'doctorado', 'doctorate', 'ph.d']):
+        if any(word in text_lower for word in ['phd', 'doctorado']):
             return 'doctorate'
-        elif any(word in text_lower for word in ['maestría', 'master', 'msc', 'mba', "master's", 'postgrado']):
+        elif any(word in text_lower for word in ['maestría', 'master', 'mba']):
             return 'master'
-        elif any(word in text_lower for word in ['licenciatura', 'bachelor', 'grado', 'universitario', 'university degree', "bachelor's"]):
+        elif any(word in text_lower for word in ['licenciatura', 'bachelor']):
             return 'bachelor'
-        elif any(word in text_lower for word in ['técnico', 'technical', 'associate', 'diploma']):
+        elif any(word in text_lower for word in ['técnico', 'technical']):
             return 'associate'
-        elif any(word in text_lower for word in ['secundaria', 'high school', 'bachillerato']):
-            return 'high_school'
         
         return None
     
     def extract_job_type(self, text):
-        """Extract job type from text"""
+        """Extract job type"""
         if not text:
             return None
         
         text_lower = text.lower()
         
-        if 'tiempo completo' in text_lower or 'full time' in text_lower or 'full-time' in text_lower:
+        if 'tiempo completo' in text_lower or 'full time' in text_lower:
             return 'full-time'
-        elif 'medio tiempo' in text_lower or 'part time' in text_lower or 'part-time' in text_lower:
+        elif 'medio tiempo' in text_lower or 'part time' in text_lower:
             return 'part-time'
         elif 'temporal' in text_lower or 'temporary' in text_lower:
             return 'temporary'
-        elif 'contrato' in text_lower or 'contract' in text_lower or 'contractor' in text_lower:
+        elif 'contrato' in text_lower or 'contract' in text_lower:
             return 'contract'
-        elif 'internship' in text_lower or 'pasantía' in text_lower or 'intern' in text_lower:
-            return 'internship'
-        elif 'freelance' in text_lower or 'por proyecto' in text_lower:
-            return 'freelance'
         
         return None
     
     def click_job_and_extract_details(self, job_element, job_data):
-        """Click on a job and extract full details from the detail pane"""
+        """Click job and extract full details"""
         try:
-            # Click the job card to open details
             job_element.click()
-            time.sleep(random.uniform(1.5, 3))
+            time.sleep(random.uniform(2, 3))
             
-            # Wait for detail pane to load
+            # Wait for details to load
             try:
-                self.wait.until(EC.presence_of_element_located((By.ID, "jobDescriptionText")))
+                self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#jobDescriptionText, .jobsearch-JobComponent-description")))
             except:
                 pass
             
-            # Extract full description
-            try:
-                desc_elem = self.driver.find_element(By.ID, "jobDescriptionText")
-                full_description = desc_elem.text.strip()
-                job_data['_job_description'] = full_description
-                
-                # Extract category from description
-                category = self.extract_category(job_data['_job_title'], full_description)
-                if category:
-                    job_data['_job_category'] = category
-                
-                # Extract experience and qualification from description
-                exp, career_level = self.extract_experience_from_text(full_description)
-                if exp:
-                    job_data['_job_experience'] = exp
-                if career_level:
-                    job_data['_job_career_level'] = career_level
-                
-                qualification = self.extract_qualification(full_description)
-                if qualification:
-                    job_data['_job_qualification'] = qualification
-                
-                # Extract job type if not already found
-                if not job_data['_job_type']:
-                    job_type = self.extract_job_type(full_description)
-                    if job_type:
-                        job_data['_job_type'] = job_type
-                
-            except:
-                pass
+            # Extract full description - UPDATED SELECTORS
+            desc_selectors = [
+                "#jobDescriptionText",
+                ".jobsearch-JobComponent-description",
+                "div[id*='jobDescriptionText']",
+                "div.jobsearch-jobDescriptionText",
+                "div[class*='jobDescription']"
+            ]
             
-            # Extract full location/address
-            try:
-                location_selectors = [
-                    'div[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
-                    'div.jobsearch-JobInfoHeader-subtitle-container div',
-                    'div.jobsearch-CompanyInfoWithoutHeaderImage'
-                ]
-                
-                for selector in location_selectors:
-                    try:
-                        loc_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
-                        loc_text = loc_elem.text.strip()
-                        if loc_text and not job_data['_job_location']:
-                            job_data['_job_location'] = loc_text
-                            job_data['_job_address'] = loc_text
-                            break
-                    except:
-                        continue
-            except:
-                pass
+            for selector in desc_selectors:
+                try:
+                    desc_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
+                    full_description = desc_elem.text.strip()
+                    if full_description:
+                        job_data['_job_description'] = full_description
+                        
+                        category = self.extract_category(job_data['_job_title'], full_description)
+                        if category:
+                            job_data['_job_category'] = category
+                        
+                        exp, career_level = self.extract_experience_from_text(full_description)
+                        if exp:
+                            job_data['_job_experience'] = exp
+                        if career_level:
+                            job_data['_job_career_level'] = career_level
+                        
+                        qualification = self.extract_qualification(full_description)
+                        if qualification:
+                            job_data['_job_qualification'] = qualification
+                        
+                        if not job_data['_job_type']:
+                            job_type = self.extract_job_type(full_description)
+                            if job_type:
+                                job_data['_job_type'] = job_type
+                        break
+                except:
+                    continue
             
-            # Extract salary from detail view
-            try:
-                salary_selectors = [
-                    '#salaryInfoAndJobType',
-                    'div[id*="salary"]',
-                    'span[class*="salary"]'
-                ]
-                
-                for selector in salary_selectors:
-                    try:
-                        salary_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
-                        salary_text = salary_elem.text.strip()
-                        if salary_text and not job_data['_job_salary']:
-                            salary_info = self.extract_salary(salary_text)
-                            job_data.update(salary_info)
-                            break
-                    except:
-                        continue
-            except:
-                pass
+            # Extract location
+            location_selectors = [
+                'div[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
+                'div[data-testid="inlineHeader-companyLocation"]',
+                'div.jobsearch-JobInfoHeader-subtitle',
+                'div[class*="companyLocation"]'
+            ]
             
-            # Check for "Urgently Hiring"
-            try:
-                urgent = self.driver.find_element(By.XPATH, "//*[contains(text(), 'Urge contratar') or contains(text(), 'Urgently hiring') or contains(text(), 'contratación urgente')]")
-                if urgent:
-                    job_data['_job_urgent'] = 1
-                    if 'urgent' not in job_data['_job_tag']:
-                        job_data['_job_tag'].append('urgent')
-            except:
-                pass
+            for selector in location_selectors:
+                try:
+                    loc_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
+                    loc_text = loc_elem.text.strip()
+                    if loc_text:
+                        job_data['_job_location'] = loc_text
+                        job_data['_job_address'] = loc_text
+                        job_data['_job_map_location'] = loc_text
+                        break
+                except:
+                    continue
             
-            # Apply button URL
-            try:
-                apply_button = self.driver.find_element(By.CSS_SELECTOR, '#applyButtonLinkContainer a, button#indeedApplyButton')
-                apply_url = apply_button.get_attribute('href')
-                if apply_url:
-                    job_data['_job_apply_url'] = apply_url
-                    
-                    # Determine apply type
-                    if 'indeed.com' in apply_url:
-                        job_data['_job_apply_type'] = 'indeed'
-                    else:
-                        job_data['_job_apply_type'] = 'external'
-            except:
-                pass
+            # Extract salary
+            salary_selectors = [
+                "#salaryInfoAndJobType",
+                'div[id*="salary"]',
+                'div.css-kyg8or',
+                'div[class*="salary"]'
+            ]
             
-            # Company logo from detail pane - try multiple selectors
-            try:
-                if not job_data['_job_featured_image']:
-                    logo_selectors = [
-                        'img[alt*="logo"]',
-                        'img[alt*="Logo"]',
-                        'img.jobsearch-CompanyAvatar-image',
-                        'div[data-testid="inlineHeader-companyLogo"] img',
-                        'div.jobsearch-InlineCompanyRating img',
-                        'div.jobsearch-CompanyInfoWithoutHeaderImage img',
-                        'img[class*="CompanyAvatar"]',
-                        'img[class*="company"]',
-                        'div[class*="CompanyInfo"] img'
-                    ]
-                    
-                    for selector in logo_selectors:
-                        try:
-                            logo_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
-                            logo_src = logo_elem.get_attribute('src')
-                            # Filter out small icons and Indeed default images
-                            if logo_src and 'indeed' not in logo_src.lower() and len(logo_src) > 20:
-                                job_data['_job_featured_image'] = logo_src
-                                break
-                        except:
-                            continue
-            except:
-                pass
+            for selector in salary_selectors:
+                try:
+                    salary_elem = self.driver.find_element(By.CSS_SELECTOR, selector)
+                    salary_text = salary_elem.text.strip()
+                    if salary_text and not job_data['_job_salary']:
+                        salary_info = self.extract_salary(salary_text)
+                        job_data.update(salary_info)
+                        break
+                except:
+                    continue
             
         except Exception as e:
-            print(f"      ⚠️  Error extracting details: {e}")
+            print(f"      ⚠️ Error extracting details: {e}")
     
     def extract_job_from_card(self, card):
-        """Extract basic job data from a job card"""
+        """Extract job data from card"""
         job_data = {
             '_job_featured_image': None,
             '_job_title': None,
@@ -450,8 +308,8 @@ class IndeedFullDetailsScraper:
             '_job_description': None,
             '_job_category': None,
             '_job_type': None,
-            '_job_tag': [],
-            '_job_expiry_date': None,
+            '_job_tag': ['Costa Rica'],
+            '_job_expiry_date': default_deadline,
             '_job_gender': None,
             '_job_apply_type': 'external',
             '_job_apply_url': None,
@@ -464,132 +322,103 @@ class IndeedFullDetailsScraper:
             '_job_qualification': None,
             '_job_video_url': None,
             '_job_photos': [],
-            '_job_application_deadline_date': None,
+            '_job_application_deadline_date': default_deadline,
             '_job_address': None,
             '_job_location': None,
             '_job_map_location': None
         }
         
         try:
-            # Title and URL - try multiple selectors
+            # Title - UPDATED SELECTORS
             title_selectors = [
+                'h2.jobTitle a span',
                 'h2.jobTitle span',
-                'h2.jobTitle a',
-                'a.jcs-JobTitle',
-                'span[id^="jobTitle-"]'
+                'a.jcs-JobTitle span',
+                'span[id*="jobTitle"]',
+                'h2 span[title]'
             ]
             
             for selector in title_selectors:
                 try:
                     title_elem = card.find_element(By.CSS_SELECTOR, selector)
                     job_data['_job_title'] = title_elem.text.strip()
-                    
-                    # Try to get link
-                    try:
-                        if title_elem.tag_name == 'a':
-                            job_data['_job_apply_url'] = title_elem.get_attribute('href')
-                        else:
-                            link = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle a, a.jcs-JobTitle')
-                            job_data['_job_apply_url'] = link.get_attribute('href')
-                    except:
-                        pass
-                    
-                    break
+                    if job_data['_job_title']:
+                        break
                 except:
                     continue
+            
+            # URL
+            try:
+                link = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle a, a.jcs-JobTitle')
+                job_data['_job_apply_url'] = link.get_attribute('href')
+            except:
+                pass
             
             # Location
             location_selectors = [
                 'div[data-testid="text-location"]',
-                '.companyLocation',
-                'div.companyLocation'
+                'div.companyLocation',
+                'span.companyLocation'
             ]
             
             for selector in location_selectors:
                 try:
                     location_elem = card.find_element(By.CSS_SELECTOR, selector)
                     location_text = location_elem.text.strip()
-                    job_data['_job_location'] = location_text
-                    job_data['_job_address'] = location_text
-                    break
+                    if location_text:
+                        job_data['_job_location'] = location_text
+                        job_data['_job_address'] = location_text
+                        job_data['_job_map_location'] = location_text
+                        break
                 except:
                     continue
             
             # Salary
             try:
-                salary_elem = card.find_element(By.CSS_SELECTOR, '.salary-snippet-container, .salary-snippet, span.salary')
+                salary_elem = card.find_element(By.CSS_SELECTOR, 'div.salary-snippet-container, div.attribute_snippet')
                 salary_text = salary_elem.text.strip()
-                salary_info = self.extract_salary(salary_text)
-                job_data.update(salary_info)
+                if salary_text:
+                    salary_info = self.extract_salary(salary_text)
+                    job_data.update(salary_info)
             except:
                 pass
             
-            # Snippet description
+            # Snippet
             try:
-                snippet_elem = card.find_element(By.CSS_SELECTOR, '.job-snippet, ul.job-snippet')
+                snippet_elem = card.find_element(By.CSS_SELECTOR, 'div.job-snippet, ul.job-snippet, div[class*="snippet"]')
                 snippet_text = snippet_elem.text.strip()
-                job_data['_job_description'] = snippet_text
-                
-                # Detect job type from snippet
-                job_type = self.extract_job_type(snippet_text)
-                if job_type:
-                    job_data['_job_type'] = job_type
+                if snippet_text:
+                    job_data['_job_description'] = snippet_text
+                    job_type = self.extract_job_type(snippet_text)
+                    if job_type:
+                        job_data['_job_type'] = job_type
             except:
                 pass
             
-            # Check for tags
+            # Check tags
             card_html = card.get_attribute('innerHTML').lower()
             
             if 'patrocinado' in card_html or 'sponsored' in card_html:
                 job_data['_job_featured'] = 1
                 job_data['_job_tag'].append('sponsored')
             
-            if 'urge contratar' in card_html or 'urgently' in card_html or 'urgente' in card_html:
+            if 'urge' in card_html or 'urgently' in card_html:
                 job_data['_job_urgent'] = 1
                 job_data['_job_tag'].append('urgent')
             
-            if 'nuevo' in card_html:
-                job_data['_job_tag'].append('new')
-            
-            # Logo - try multiple selectors
-            logo_selectors = [
-                'img[class*="logo"]',
-                'img[class*="avatar"]',
-                'img[data-testid*="company"]',
-                'img.company-logo',
-                'div.company-logo img',
-                'td.companyInfo img',
-                'img[alt*="logo"]',
-                'img[alt*="Logo"]',
-                '.companyLogo img',
-                'img'  # Last resort - any image in card
-            ]
-            
-            for selector in logo_selectors:
-                try:
-                    logo = card.find_element(By.CSS_SELECTOR, selector)
-                    logo_src = logo.get_attribute('src')
-                    # Filter out placeholder/icon images
-                    if logo_src and 'indeed' not in logo_src.lower() and len(logo_src) > 20:
-                        job_data['_job_featured_image'] = logo_src
-                        break
-                except:
-                    continue
-            
         except Exception as e:
-            print(f"      ⚠️  Error extracting from card: {e}")
+            print(f"      ⚠️ Error extracting from card: {e}")
         
         return job_data
     
     def scrape_jobs(self, search_url, max_pages=5, max_jobs=None, extract_full_details=True):
-        """Scrape jobs with optional full details extraction"""
+        """Main scraping function"""
         all_jobs = []
         
         print(f"🔍 Starting scrape: {search_url}\n")
         print(f"📋 Extract full details: {'YES' if extract_full_details else 'NO'}\n")
         
         for page in range(max_pages):
-            # Build URL
             if page == 0:
                 url = search_url
             else:
@@ -600,94 +429,89 @@ class IndeedFullDetailsScraper:
             
             try:
                 self.driver.get(url)
-                time.sleep(random.uniform(2, 4))
+                time.sleep(random.uniform(3, 5))
                 
-                # Scroll to load content
+                # Scroll to load
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-                time.sleep(1)
+                time.sleep(5)
                 
-                # Find job cards
+                # UPDATED JOB CARD SELECTORS - Try multiple
                 job_cards = None
                 selectors = [
                     'div.job_seen_beacon',
+                    'div.cardOutline',
+                    'li.css-5lfssm',
                     'div[data-jk]',
                     'td.resultContent',
-                    'li.css-5lfssm'
+                    'div.slider_container div.slider_item',
+                    'ul.jobsearch-ResultsList li',
+                    'div[class*="job_seen"]',
+                    'div[class*="result"]'
                 ]
                 
                 for selector in selectors:
                     try:
                         cards = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                        if cards:
+                        if cards and len(cards) > 0:
                             job_cards = cards
-                            print(f"  ✅ Found {len(cards)} jobs\n")
+                            print(f"  ✅ Found {len(cards)} jobs using selector: {selector}\n")
                             break
                     except:
                         continue
                 
                 if not job_cards:
-                    print("  ⚠️  No job cards found")
+                    print("  ⚠️ No job cards found with any selector")
+                    
+                    # Debug info
+                    print("\n  📸 Saving debug info...")
                     self.driver.save_screenshot(f"debug_page{page+1}.png")
                     with open(f"debug_page{page+1}.html", "w", encoding="utf-8") as f:
                         f.write(self.driver.page_source)
+                    
+                    # Print page title
+                    print(f"  Page title: {self.driver.title}")
+                    
+                    # Check for CAPTCHA
+                    if "captcha" in self.driver.page_source.lower():
+                        print("  ⚠️ CAPTCHA detected!")
+                    
                     break
                 
-                # Extract jobs
+                # Process jobs
                 for idx, card in enumerate(job_cards, 1):
                     try:
-                        # Extract basic info
                         job_data = self.extract_job_from_card(card)
                         
                         if not job_data['_job_title']:
                             continue
                         
-                        print(f"  {idx:2d}. {job_data['_job_title'][:50]:50s}")
+                        title_display = job_data['_job_title'][:50]
+                        print(f"  {idx:2d}. {title_display:50s}")
                         
-                        # Click and extract full details
                         if extract_full_details:
-                            print(f"      🔍 Extracting full details...")
+                            print(f"      🔎 Extracting full details...")
                             self.click_job_and_extract_details(card, job_data)
-                            
-                            # Additional logo extraction attempt if still null
-                            if not job_data['_job_featured_image']:
-                                try:
-                                    # Try to find any company image on the page
-                                    all_images = self.driver.find_elements(By.TAG_NAME, 'img')
-                                    for img in all_images:
-                                        src = img.get_attribute('src')
-                                        alt = img.get_attribute('alt') or ''
-                                        # Look for company-related images
-                                        if src and any(keyword in alt.lower() for keyword in ['logo', 'company', 'employer']):
-                                            if 'indeed' not in src.lower() and len(src) > 20:
-                                                job_data['_job_featured_image'] = src
-                                                break
-                                except:
-                                    pass
                         
-                        # Extract category if still None
                         if not job_data['_job_category']:
                             category = self.extract_category(job_data['_job_title'], job_data['_job_description'])
                             job_data['_job_category'] = category
                         
                         all_jobs.append(job_data)
                         
-                        # Check max jobs limit
                         if max_jobs and len(all_jobs) >= max_jobs:
                             print(f"\n✅ Reached max jobs limit ({max_jobs})")
                             return all_jobs
                         
-                        # Small delay between jobs
                         time.sleep(random.uniform(0.5, 1.5))
                         
                     except Exception as e:
                         print(f"      ❌ Error: {e}")
                         continue
                 
-                print()  # Blank line between pages
+                print()
                 
-                # Delay between pages
                 if page < max_pages - 1:
-                    delay = random.uniform(3, 6)
+                    delay = random.uniform(4, 7)
                     print(f"  ⏳ Waiting {delay:.1f}s before next page...\n")
                     time.sleep(delay)
                 
@@ -702,8 +526,7 @@ class IndeedFullDetailsScraper:
         print("\n🔒 Closing browser...")
         try:
             self.driver.quit()
-        except Exception as e:
-            # Ignore cleanup errors on Windows
+        except:
             pass
     
     def save_to_json(self, jobs, filename='indeed_jobs.json'):
@@ -713,7 +536,6 @@ class IndeedFullDetailsScraper:
                 json.dump(jobs, f, ensure_ascii=False, indent=2)
             print(f"💾 Saved {len(jobs)} jobs to {filename}")
         except PermissionError:
-            print(f"⚠️  Cannot save to {filename} (file is open). Trying alternative filename...")
             alt_filename = filename.replace('.json', f'_{int(time.time())}.json')
             with open(alt_filename, 'w', encoding='utf-8') as f:
                 json.dump(jobs, f, ensure_ascii=False, indent=2)
@@ -722,7 +544,7 @@ class IndeedFullDetailsScraper:
     def save_to_csv(self, jobs, filename='indeed_jobs.csv'):
         """Save to CSV"""
         if not jobs:
-            print("⚠️  No jobs to save")
+            print("⚠️ No jobs to save")
             return
         
         try:
@@ -738,8 +560,6 @@ class IndeedFullDetailsScraper:
                     writer.writerow(row)
             print(f"💾 Saved {len(jobs)} jobs to {filename}")
         except PermissionError:
-            print(f"⚠️  Cannot save to {filename} (file is open in another program)")
-            print(f"💡 Please close the file and run the script again, or it will save with timestamp")
             alt_filename = filename.replace('.csv', f'_{int(time.time())}.csv')
             keys = jobs[0].keys()
             with open(alt_filename, 'w', newline='', encoding='utf-8') as f:
@@ -756,33 +576,28 @@ class IndeedFullDetailsScraper:
 
 def main():
     print("="*70)
-    print("INDEED COSTA RICA - FULL DETAILS JOB SCRAPER")
+    print("INDEED COSTA RICA - FULL DETAILS JOB SCRAPER (FIXED)")
     print("="*70)
     print()
     
-    # Client's URL
-    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=d182fba1685af283"
+    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=8223ee513792bd50"
     
     scraper = None
     try:
-        # Initialize (set headless=True to hide browser)
         scraper = IndeedFullDetailsScraper(headless=False)
         
-        # Scrape with full details
         jobs = scraper.scrape_jobs(
             search_url, 
             max_pages=5,
-            max_jobs=None,  # None = get all jobs
-            extract_full_details=True  # Set True for complete data
+            max_jobs=None,
+            extract_full_details=True
         )
         
-        # Save results
         if jobs:
             print(f"\n{'='*70}")
             print(f"✅ Successfully scraped {len(jobs)} jobs!")
             print(f"{'='*70}\n")
             
-            # Generate unique filename with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             json_filename = f'indeed_cr_jobs_{timestamp}.json'
             csv_filename = f'indeed_cr_jobs_{timestamp}.csv'
@@ -790,7 +605,7 @@ def main():
             scraper.save_to_json(jobs, json_filename)
             scraper.save_to_csv(jobs, csv_filename)
             
-            # Print statistics
+            # Statistics
             print("\n📊 STATISTICS:")
             print("-" * 70)
             print(f"Total jobs: {len(jobs)}")
@@ -799,7 +614,6 @@ def main():
             print(f"Urgent hiring: {sum(1 for j in jobs if j['_job_urgent'] == 1)}")
             print(f"Featured/Sponsored: {sum(1 for j in jobs if j['_job_featured'] == 1)}")
             
-            # Category breakdown
             categories = {}
             for job in jobs:
                 cat = job['_job_category'] or 'Unknown'
@@ -809,87 +623,28 @@ def main():
             for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
                 print(f"  {cat}: {count}")
             
-            # Job type breakdown
-            job_types = {}
-            for job in jobs:
-                jtype = job['_job_type'] or 'Not specified'
-                job_types[jtype] = job_types.get(jtype, 0) + 1
-            
-            print("\n💼 JOB TYPES:")
-            for jtype, count in sorted(job_types.items(), key=lambda x: x[1], reverse=True):
-                print(f"  {jtype}: {count}")
-            
-            # Career level breakdown
-            career_levels = {}
-            for job in jobs:
-                level = job['_job_career_level'] or 'Not specified'
-                career_levels[level] = career_levels.get(level, 0) + 1
-            
-            print("\n📈 CAREER LEVELS:")
-            for level, count in sorted(career_levels.items(), key=lambda x: x[1], reverse=True):
-                print(f"  {level}: {count}")
-            
-            # Salary type breakdown
-            salary_types = {}
-            for job in jobs:
-                if job['_job_salary']:
-                    stype = job['_job_salary_type'] or 'Not specified'
-                    salary_types[stype] = salary_types.get(stype, 0) + 1
-            
-            if salary_types:
-                print("\n💰 SALARY TYPES:")
-                for stype, count in sorted(salary_types.items(), key=lambda x: x[1], reverse=True):
-                    print(f"  {stype}: {count}")
-            
-            # Sample job
             print("\n📋 SAMPLE JOB:")
             print("-" * 70)
             sample = jobs[0]
             print(f"Title: {sample['_job_title']}")
             print(f"Category: {sample['_job_category']}")
             print(f"Location: {sample['_job_location']}")
-            print(f"Address: {sample['_job_address']}")
             print(f"Type: {sample['_job_type']}")
-            print(f"Experience: {sample['_job_experience']} ({sample['_job_career_level']})")
-            print(f"Qualification: {sample['_job_qualification']}")
-            
-            if sample['_job_salary']:
-                salary_range = f"{sample['_job_salary']}"
-                if sample['_job_max_salary']:
-                    salary_range += f" - {sample['_job_max_salary']}"
-                print(f"Salary: {salary_range} ({sample['_job_salary_type']})")
-            else:
-                print(f"Salary: Not specified")
-            
-            print(f"Featured: {sample['_job_featured']} | Urgent: {sample['_job_urgent']} | Filled: {sample['_job_filled']}")
-            print(f"Apply Type: {sample['_job_apply_type']}")
-            print(f"Tags: {', '.join(sample['_job_tag'])}" if sample['_job_tag'] else "Tags: None")
-            
             if sample['_job_description']:
-                desc_preview = sample['_job_description'][:300].replace('\n', ' ')
+                desc_preview = sample['_job_description'][:200].replace('\n', ' ')
                 print(f"Description: {desc_preview}...")
-            else:
-                print(f"Description: N/A")
-            
-            print(f"Apply URL: {sample['_job_apply_url']}")
-            
-            if sample['_job_featured_image']:
-                print(f"Logo: {sample['_job_featured_image'][:80]}...")
-            
-            print("-" * 70)
-            
-            # Export summary
-            print("\n📦 EXPORTED FILES:")
-            print("-" * 70)
-            print(f"  ✅ {json_filename}")
-            print(f"  ✅ {csv_filename}")
             print("-" * 70)
             
         else:
-            print("\n❌ No jobs scraped. Check debug files.")
+            print("\n❌ No jobs scraped. Check debug files (debug_page1.html and debug_page1.png)")
+            print("\nTroubleshooting tips:")
+            print("1. Check if Indeed is blocking your IP")
+            print("2. Try a different search URL")
+            print("3. Check the debug HTML file for CAPTCHA")
+            print("4. Try running with headless=False to see what's happening")
     
     except KeyboardInterrupt:
-        print("\n\n⚠️  Interrupted by user")
+        print("\n\n⚠️ Interrupted by user")
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
@@ -899,7 +654,7 @@ def main():
             try:
                 scraper.close()
             except:
-                pass  # Ignore any cleanup errors
+                pass
         print("\n✅ Done!")
 
 

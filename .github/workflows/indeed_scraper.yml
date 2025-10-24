@@ -19,6 +19,9 @@ jobs:
         with:
           python-version: '3.10'
 
+      # ---------------------------------------------------------
+      # Install required system packages for Chrome on Ubuntu 24.04
+      # ---------------------------------------------------------
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -38,19 +41,59 @@ jobs:
             libxshmfence1 \
             libpango-1.0-0 \
             libcairo2 \
-            xvfb wget unzip
+            xvfb wget unzip curl jq
 
-      - name: Install Google Chrome
+      # ---------------------------------------------------------
+      # Install Chrome and auto-match ChromeDriver version
+      # ---------------------------------------------------------
+      - name: Install Google Chrome and matching ChromeDriver
         run: |
+          echo "Installing latest stable Google Chrome..."
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt install -y ./google-chrome-stable_current_amd64.deb
           google-chrome --version
 
+          echo "Matching ChromeDriver version..."
+          CHROME_MAJOR=$(google-chrome --version | grep -oP '\d+' | head -1)
+          echo "Detected Chrome major version: $CHROME_MAJOR"
+
+          DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | \
+            jq -r --arg ver "$CHROME_MAJOR" '.versions[] | select(.version | startswith($ver + ".")) | .version' | head -1)
+
+          echo "Installing ChromeDriver $DRIVER_VERSION"
+          DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | \
+            jq -r --arg ver "$DRIVER_VERSION" '.versions[] | select(.version==$ver) | .downloads.chromedriver[] | select(.platform=="linux64") | .url')
+
+          wget -q "$DRIVER_URL" -O /tmp/chromedriver.zip
+          unzip -q /tmp/chromedriver.zip -d /tmp/
+          sudo mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
+
+      # ---------------------------------------------------------
+      # Install Python dependencies
+      # ---------------------------------------------------------
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # ---------------------------------------------------------
+      # Run scraper with virtual display
+      # ---------------------------------------------------------
       - name: Run Indeed Scraper
         run: |
           xvfb-run --auto-servernum python indeed_full_details_scraper.py
+
+      # ---------------------------------------------------------
+      # Optional: Upload scrape results (e.g. CSV or JSON)
+      # ---------------------------------------------------------
+      - name: Upload results
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: indeed-scrape-results
+          path: |
+            output.csv
+            output.json
+            logs/

@@ -271,86 +271,138 @@ class IndeedFullDetailsScraper:
     def translate_to_spanish(self, job_data):
         """Translate English terms to Spanish in the job data"""
         
+        # Translate category names
+        category_map = {
+            'IT/Software Development': 'Desarrollo de TI/Software',
+            'Customer Service': 'Servicio al cliente',
+            'Sales and Marketing': 'Ventas y Marketing',
+            'Human Resources': 'Recursos Humanos',
+            'Finance and Accounting': 'Finanzas y Contabilidad',
+            'Administration': 'Administración',
+            'Education': 'Educación',
+            'Health': 'Salud',
+            'Engineering': 'Ingeniería',
+            'Design': 'Diseño',
+            'General/Other': 'General/Otro',
+        }
+        if job_data.get('_job_category'):
+            category = job_data['_job_category']
+            job_data['_job_category'] = category_map.get(category, job_data['_job_category'])
+        
         # Translate salary type
         salary_type_map = {
             'hourly': 'por hora',
             'hour': 'por hora',
+            'por hora': 'por hora',
             'monthly': 'mensual',
             'month': 'mensual',
+            'mensual': 'mensual',
             'annual': 'anual',
             'yearly': 'anual',
             'year': 'anual',
+            'anual': 'anual',
         }
         if job_data.get('_job_salary_type'):
-            salary_type = job_data['_job_salary_type'].lower()
+            salary_type = str(job_data['_job_salary_type']).lower().strip()
             job_data['_job_salary_type'] = salary_type_map.get(salary_type, job_data['_job_salary_type'])
         
         # Translate career level
         career_level_map = {
             'senior': 'sénior',
+            'sénior': 'sénior',
             'sr': 'sénior',
+            'sr.': 'sénior',
             'junior': 'júnior',
+            'júnior': 'júnior',
             'jr': 'júnior',
+            'jr.': 'júnior',
             'entry': 'entrada',
             'entry level': 'entrada',
+            'entrada': 'entrada',
             'mid': 'medio',
             'mid level': 'medio',
+            'medio': 'medio',
             'intermediate': 'medio',
+            'intermedio': 'medio',
         }
         if job_data.get('_job_career_level'):
-            career_level = job_data['_job_career_level'].lower()
+            career_level = str(job_data['_job_career_level']).lower().strip()
             job_data['_job_career_level'] = career_level_map.get(career_level, job_data['_job_career_level'])
         
         # Translate qualification
         qualification_map = {
             'high school': 'secundaria',
+            'secundaria': 'secundaria',
+            'bachillerato': 'secundaria',
             'associate': 'técnico',
             'technical': 'técnico',
+            'técnico': 'técnico',
+            'diploma': 'técnico',
             'bachelor': 'licenciatura',
             "bachelor's": 'licenciatura',
+            'licenciatura': 'licenciatura',
+            'grado': 'licenciatura',
+            'university degree': 'licenciatura',
             'master': 'maestría',
             "master's": 'maestría',
+            'maestría': 'maestría',
             'mba': 'maestría',
+            'msc': 'maestría',
             'doctorate': 'doctorado',
+            'doctorado': 'doctorado',
             'phd': 'doctorado',
             'ph.d': 'doctorado',
+            'ph.d.': 'doctorado',
         }
         if job_data.get('_job_qualification'):
-            qualification = job_data['_job_qualification'].lower()
+            qualification = str(job_data['_job_qualification']).lower().strip()
             job_data['_job_qualification'] = qualification_map.get(qualification, job_data['_job_qualification'])
         
         # Translate job type
         job_type_map = {
             'full time': 'tiempo completo',
             'full-time': 'tiempo completo',
+            'fulltime': 'tiempo completo',
+            'tiempo completo': 'tiempo completo',
             'part time': 'medio tiempo',
             'part-time': 'medio tiempo',
+            'parttime': 'medio tiempo',
+            'medio tiempo': 'medio tiempo',
             'temporary': 'temporal',
+            'temporal': 'temporal',
             'contract': 'contrato',
+            'contrato': 'contrato',
             'internship': 'pasantía',
             'intern': 'pasantía',
+            'pasantía': 'pasantía',
             'freelance': 'freelance',
+            'por proyecto': 'freelance',
         }
         if job_data.get('_job_type'):
-            job_type = job_data['_job_type'].lower()
+            job_type = str(job_data['_job_type']).lower().strip()
             job_data['_job_type'] = job_type_map.get(job_type, job_data['_job_type'])
         
         # Translate tags
         tag_map = {
             'sponsored': 'patrocinado',
+            'patrocinado': 'patrocinado',
             'urgent': 'urgente',
+            'urgente': 'urgente',
             'new': 'nuevo',
+            'nuevo': 'nuevo',
+            'costa rica': 'Costa Rica',
         }
         if job_data.get('_job_tag'):
             translated_tags = []
             for tag in job_data['_job_tag']:
-                translated_tags.append(tag_map.get(tag.lower(), tag))
+                tag_lower = str(tag).lower().strip()
+                translated_tags.append(tag_map.get(tag_lower, tag))
             job_data['_job_tag'] = translated_tags
         
         # Translate experience text (e.g., "5+ years" -> "5+ años")
         if job_data.get('_job_experience'):
-            exp = job_data['_job_experience']
-            exp = exp.replace('years', 'años').replace('year', 'año')
+            exp = str(job_data['_job_experience'])
+            exp = exp.replace('years', 'años').replace('year', 'año').replace('Years', 'años').replace('Year', 'año')
             job_data['_job_experience'] = exp
         
         return job_data

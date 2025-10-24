@@ -1,10 +1,12 @@
-name: Weekly Indeed Scraper
+name: Run Indeed Scraper
 
 on:
+  workflow_dispatch:          # allow manual trigger
   schedule:
-    # Runs every Monday at 09:00 UTC (adjust as needed)
-    - cron: "0 9 * * 1"
-  workflow_dispatch:  # allow manual trigger from GitHub UI
+    - cron: "0 6 * * *"       # runs every day at 06:00 UTC (adjust as needed)
+  push:
+    branches:
+      - main                  # also run on push to main
 
 jobs:
   scrape:
@@ -17,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -25,14 +27,12 @@ jobs:
           pip install nodriver beautifulsoup4 lxml
 
       - name: Run Indeed scraper
-        run: |
-          python indeed_arc_details_scraper.py
+        run: python indeed_arc_details_scraper.py
 
-      - name: Upload results
+      - name: Upload results (JSON and CSV)
         uses: actions/upload-artifact@v4
         with:
-          name: indeed-scrape-results
+          name: indeed-scraped-data
           path: |
-            *.csv
             *.json
-            debug_page_*.html
+            *.csv

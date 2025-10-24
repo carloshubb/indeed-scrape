@@ -1,150 +1,124 @@
-name: Indeed Job Scraper
+name: Weekly Indeed Scraper
 
 on:
   schedule:
-    # Run every day at 9 AM UTC (adjust to your timezone)
-    - cron: '0 9 * * *'
-  
-  workflow_dispatch:  # Allow manual trigger from GitHub Actions tab
-    inputs:
-      max_pages:
-        description: 'Maximum pages to scrape'
-        required: false
-        default: '5'
-      max_jobs:
-        description: 'Maximum jobs to scrape (leave empty for all)'
-        required: false
-        default: ''
+    - cron: "0 0 * * 1"  # Every Monday at 00:00 UTC
+  workflow_dispatch:      # Allow manual run
 
 jobs:
-  scrape-jobs:
+  scrape-indeed:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 60
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          wget \
-          unzip \
-          libglib2.0-0 \
-          libnss3 \
-          libgconf-2-4 \
-          libfontconfig1 \
-          libxss1 \
-          libappindicator3-1 \
-          libasound2 \
-          libatk-bridge2.0-0 \
-          libgtk-3-0 \
-          libx11-xcb1 \
-          libxcomposite1 \
-          libxcursor1 \
-          libxdamage1 \
-          libxi6 \
-          libxtst6 \
-          xdg-utils
-    
-    - name: Install Chrome
-      run: |
-        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
-        google-chrome --version
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install selenium undetected-chromedriver webdriver-manager
-    
-    - name: Run scraper
-      env:
-        MAX_PAGES: ${{ github.event.inputs.max_pages || '5' }}
-        MAX_JOBS: ${{ github.event.inputs.max_jobs || '' }}
-      run: |
-        python indeed_full_details_scraper.py
-    
-    - name: Get current date
-      id: date
-      run: echo "date=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
-    
-    - name: Upload JSON results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: jobs-json-${{ steps.date.outputs.date }}
-        path: indeed_cr_jobs_*.json
-        retention-days: 30
-    
-    - name: Upload CSV results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: jobs-csv-${{ steps.date.outputs.date }}
-        path: indeed_cr_jobs_*.csv
-        retention-days: 30
-    
-    - name: Upload debug files
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: debug-files-${{ steps.date.outputs.date }}
-        path: |
-          debug_*.png
-          debug_*.html
-        retention-days: 7
-    
-    - name: Commit and push results to repository
-      if: success()
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        
-        # Create data directory if it doesn't exist
-        mkdir -p data
-        
-        # Move files to data directory
-        mv indeed_cr_jobs_*.json data/ 2>/dev/null || true
-        mv indeed_cr_jobs_*.csv data/ 2>/dev/null || true
-        
-        # Add files
-        git add data/*.json data/*.csv 2>/dev/null || true
-        
-        # Commit if there are changes
-        git diff --staged --quiet || git commit -m "Auto-update: Job scraping results $(date +'%Y-%m-%d %H:%M:%S')"
-        
-        # Push changes
-        git push || echo "No changes to push"
-    
-    - name: Create summary
-      if: always()
-      run: |
-        echo "## Job Scraping Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ -f indeed_cr_jobs_*.json ] || [ -f data/indeed_cr_jobs_*.json ]; then
-          echo "✅ **Status**: Success" >> $GITHUB_STEP_SUMMARY
-          
-          # Count jobs in JSON file
-          JSON_FILE=$(ls -t indeed_cr_jobs_*.json data/indeed_cr_jobs_*.json 2>/dev/null | head -1)
-          if [ -f "$JSON_FILE" ]; then
-            JOB_COUNT=$(python -c "import json; print(len(json.load(open('$JSON_FILE'))))")
-            echo "📊 **Jobs Scraped**: $JOB_COUNT" >> $GITHUB_STEP_SUMMARY
-          fi
-        else
-          echo "❌ **Status**: Failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Check the debug artifacts for more information." >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Run Date**: $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+      # 1️⃣ Checkout your repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 3️⃣ Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium undetected-chromedriver webdriver-manager
+
+      # 4️⃣ Install Google Chrome & ChromeDriver
+      - name: Install Google Chrome & ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
+          google-chrome --version
+
+          # Match ChromeDriver version
+          CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+          DRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_$CHROME_VERSION")
+          wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+          unzip chromedriver-linux64.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
+
+      # 5️⃣ Run Indeed scraper (stealth mode)
+      - name: Run Indeed scraper
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          python - <<'EOF'
+          import time, csv, json
+          from datetime import datetime
+          from selenium.webdriver.chrome.options import Options
+          from selenium.webdriver.common.by import By
+          from selenium import webdriver
+
+          print("🚀 Running Indeed Scraper (CI Headless Stealth Mode)")
+
+          # 🧠 Headless + stealth Chrome config
+          options = Options()
+          options.add_argument("--headless=new")
+          options.add_argument("--no-sandbox")
+          options.add_argument("--disable-dev-shm-usage")
+          options.add_argument("--disable-blink-features=AutomationControlled")
+          options.add_argument("--window-size=1920,1080")
+          options.add_argument("--disable-gpu")
+          options.add_argument("--lang=en-US,en")
+          options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/120.0.0.0 Safari/537.36")
+
+          driver = webdriver.Chrome(options=options)
+          url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
+          print(f"🔍 Navigating to: {url}")
+          driver.get(url)
+          time.sleep(5)
+
+          job_cards = driver.find_elements(By.CSS_SELECTOR, "div.job_seen_beacon")
+          print(f"📊 Found {len(job_cards)} job cards")
+
+          if not job_cards:
+              print("⚠️ No job listings visible — possibly CAPTCHA or region restriction.")
+              driver.save_screenshot("indeed_debug.png")
+              driver.quit()
+              exit(1)
+
+          jobs = []
+          for card in job_cards[:10]:
+              try:
+                  title = card.find_element(By.CSS_SELECTOR, "h2 span").text.strip()
+                  company = card.find_element(By.CSS_SELECTOR, "span[data-testid='company-name']").text.strip()
+                  location = card.find_element(By.CSS_SELECTOR, "div[data-testid='text-location']").text.strip()
+                  jobs.append({"title": title, "company": company, "location": location})
+              except Exception:
+                  pass
+
+          timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+          json_file = f"indeed_jobs_{timestamp}.json"
+          csv_file = f"indeed_jobs_{timestamp}.csv"
+
+          with open(json_file, "w", encoding="utf-8") as f:
+              json.dump(jobs, f, indent=2, ensure_ascii=False)
+
+          with open(csv_file, "w", encoding="utf-8", newline="") as f:
+              writer = csv.DictWriter(f, fieldnames=["title", "company", "location"])
+              writer.writeheader()
+              writer.writerows(jobs)
+
+          driver.quit()
+          print(f"✅ Scraped {len(jobs)} jobs → Saved to {csv_file}")
+          EOF
+
+      # 6️⃣ Upload scraped data and debug files
+      - name: Upload scraped data
+        uses: actions/upload-artifact@v4
+        with:
+          name: indeed-scraped-data
+          path: |
+            *.csv
+            *.json
+            indeed_debug.png

@@ -571,6 +571,9 @@ class IndeedFullDetailsScraper:
                         if not job_data['_job_category']:
                             job_data['_job_category'] = self.extract_category(job_data['_job_title'], job_data['_job_description'])
 
+                        # TRANSLATE ALL ENGLISH TERMS TO SPANISH
+                        job_data = self.translate_to_spanish(job_data)
+
                         all_jobs.append(job_data)
                         if max_jobs and len(all_jobs) >= max_jobs:
                             print(f"\n✅ Reached max jobs limit ({max_jobs})")
@@ -677,5 +680,6 @@ def main():
             print("\n🔒 Browser closed.\n✅ Done!")
 
     nd.loop().run_until_complete(arun())
+
 if __name__ == "__main__":
     main()

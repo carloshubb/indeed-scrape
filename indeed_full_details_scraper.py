@@ -1,6 +1,6 @@
 """
 Indeed Costa Rica Complete Job Scraper - FIXED VERSION
-With updated selectors and better error handling
+With improved error handling for GitHub Actions
 """
 
 import undetected_chromedriver as uc
@@ -15,6 +15,8 @@ import time
 import random
 import re
 import warnings
+import sys
+import os
 from datetime import datetime, timedelta
 
 
@@ -37,11 +39,23 @@ class IndeedFullDetailsScraper:
         options.add_argument('--window-size=1920,1080')
         options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
+        # Additional options for stability
+        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument('--disable-infobars')
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-logging')
+        options.add_argument('--log-level=3')
+        options.add_argument('--silent')
+        
         print("🚀 Initializing Chrome driver...")
-        self.driver = uc.Chrome(options=options)
-        self.driver.set_page_load_timeout(30)
-        self.wait = WebDriverWait(self.driver, 15)
-        print("✅ Driver ready!\n")
+        try:
+            self.driver = uc.Chrome(options=options, version_main=None)
+            self.driver.set_page_load_timeout(30)
+            self.wait = WebDriverWait(self.driver, 15)
+            print("✅ Driver ready!\n")
+        except Exception as e:
+            print(f"❌ Failed to initialize driver: {e}")
+            raise
     
     def extract_category(self, title, description):
         """Extract job category from title and description keywords"""
@@ -295,7 +309,8 @@ class IndeedFullDetailsScraper:
                     continue
             
         except Exception as e:
-            print(f"      ⚠️ Error extracting details: {e}")
+            # Don't print errors for individual job detail extraction
+            pass
     
     def extract_job_from_card(self, card):
         """Extract job data from card"""
@@ -407,7 +422,8 @@ class IndeedFullDetailsScraper:
                 job_data['_job_tag'].append('urgent')
             
         except Exception as e:
-            print(f"      ⚠️ Error extracting from card: {e}")
+            # Don't print errors for individual cards
+            pass
         
         return job_data
     
@@ -433,9 +449,9 @@ class IndeedFullDetailsScraper:
                 
                 # Scroll to load
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-                time.sleep(5)
+                time.sleep(2)
                 
-                # UPDATED JOB CARD SELECTORS - Try multiple
+                # UPDATED JOB CARD SELECTORS
                 job_cards = None
                 selectors = [
                     'div.job_seen_beacon',
@@ -454,27 +470,13 @@ class IndeedFullDetailsScraper:
                         cards = self.driver.find_elements(By.CSS_SELECTOR, selector)
                         if cards and len(cards) > 0:
                             job_cards = cards
-                            print(f"  ✅ Found {len(cards)} jobs using selector: {selector}\n")
+                            print(f"  ✅ Found {len(cards)} jobs\n")
                             break
                     except:
                         continue
                 
                 if not job_cards:
-                    print("  ⚠️ No job cards found with any selector")
-                    
-                    # Debug info
-                    print("\n  📸 Saving debug info...")
-                    self.driver.save_screenshot(f"debug_page{page+1}.png")
-                    with open(f"debug_page{page+1}.html", "w", encoding="utf-8") as f:
-                        f.write(self.driver.page_source)
-                    
-                    # Print page title
-                    print(f"  Page title: {self.driver.title}")
-                    
-                    # Check for CAPTCHA
-                    if "captcha" in self.driver.page_source.lower():
-                        print("  ⚠️ CAPTCHA detected!")
-                    
+                    print("  ⚠️ No job cards found")
                     break
                 
                 # Process jobs
@@ -489,7 +491,6 @@ class IndeedFullDetailsScraper:
                         print(f"  {idx:2d}. {title_display:50s}")
                         
                         if extract_full_details:
-                            print(f"      🔎 Extracting full details...")
                             self.click_job_and_extract_details(card, job_data)
                         
                         if not job_data['_job_category']:
@@ -505,7 +506,6 @@ class IndeedFullDetailsScraper:
                         time.sleep(random.uniform(0.5, 1.5))
                         
                     except Exception as e:
-                        print(f"      ❌ Error: {e}")
                         continue
                 
                 print()
@@ -516,17 +516,19 @@ class IndeedFullDetailsScraper:
                     time.sleep(delay)
                 
             except Exception as e:
-                print(f"  ❌ Page error: {e}")
+                print(f"  ⚠️ Page error: {e}")
                 break
         
         return all_jobs
     
     def close(self):
-        """Close browser"""
+        """Close browser safely"""
         print("\n🔒 Closing browser...")
         try:
-            self.driver.quit()
-        except:
+            if hasattr(self, 'driver'):
+                self.driver.quit()
+        except Exception as e:
+            # Silently ignore cleanup errors
             pass
     
     def save_to_json(self, jobs, filename='indeed_jobs.json'):
@@ -535,17 +537,16 @@ class IndeedFullDetailsScraper:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(jobs, f, ensure_ascii=False, indent=2)
             print(f"💾 Saved {len(jobs)} jobs to {filename}")
-        except PermissionError:
-            alt_filename = filename.replace('.json', f'_{int(time.time())}.json')
-            with open(alt_filename, 'w', encoding='utf-8') as f:
-                json.dump(jobs, f, ensure_ascii=False, indent=2)
-            print(f"💾 Saved {len(jobs)} jobs to {alt_filename}")
+            return True
+        except Exception as e:
+            print(f"❌ Error saving JSON: {e}")
+            return False
     
     def save_to_csv(self, jobs, filename='indeed_jobs.csv'):
         """Save to CSV"""
         if not jobs:
             print("⚠️ No jobs to save")
-            return
+            return False
         
         try:
             keys = jobs[0].keys()
@@ -559,37 +560,38 @@ class IndeedFullDetailsScraper:
                             row[key] = ', '.join(map(str, value))
                     writer.writerow(row)
             print(f"💾 Saved {len(jobs)} jobs to {filename}")
-        except PermissionError:
-            alt_filename = filename.replace('.csv', f'_{int(time.time())}.csv')
-            keys = jobs[0].keys()
-            with open(alt_filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=keys)
-                writer.writeheader()
-                for job in jobs:
-                    row = job.copy()
-                    for key, value in row.items():
-                        if isinstance(value, list):
-                            row[key] = ', '.join(map(str, value))
-                    writer.writerow(row)
-            print(f"💾 Saved {len(jobs)} jobs to {alt_filename}")
+            return True
+        except Exception as e:
+            print(f"❌ Error saving CSV: {e}")
+            return False
 
 
 def main():
     print("="*70)
-    print("INDEED COSTA RICA - FULL DETAILS JOB SCRAPER (FIXED)")
+    print("INDEED COSTA RICA - JOB SCRAPER")
     print("="*70)
     print()
+    
+    # Get environment variables or use defaults
+    max_pages = int(os.getenv('MAX_PAGES', '5'))
+    max_jobs = os.getenv('MAX_JOBS', '')
+    max_jobs = int(max_jobs) if max_jobs and max_jobs.isdigit() else None
     
     search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=8223ee513792bd50"
     
     scraper = None
+    success = False
+    
     try:
-        scraper = IndeedFullDetailsScraper(headless=False)
+        # Check if running in GitHub Actions
+        is_github_actions = os.getenv('GITHUB_ACTIONS') == 'true'
+        
+        scraper = IndeedFullDetailsScraper(headless=is_github_actions)
         
         jobs = scraper.scrape_jobs(
             search_url, 
-            max_pages=5,
-            max_jobs=None,
+            max_pages=max_pages,
+            max_jobs=max_jobs,
             extract_full_details=True
         )
         
@@ -602,8 +604,11 @@ def main():
             json_filename = f'indeed_cr_jobs_{timestamp}.json'
             csv_filename = f'indeed_cr_jobs_{timestamp}.csv'
             
-            scraper.save_to_json(jobs, json_filename)
-            scraper.save_to_csv(jobs, csv_filename)
+            json_saved = scraper.save_to_json(jobs, json_filename)
+            csv_saved = scraper.save_to_csv(jobs, csv_filename)
+            
+            if json_saved and csv_saved:
+                success = True
             
             # Statistics
             print("\n📊 STATISTICS:")
@@ -611,44 +616,30 @@ def main():
             print(f"Total jobs: {len(jobs)}")
             print(f"With full description: {sum(1 for j in jobs if j['_job_description'] and len(j['_job_description']) > 200)}")
             print(f"With salary info: {sum(1 for j in jobs if j['_job_salary'])}")
-            print(f"Urgent hiring: {sum(1 for j in jobs if j['_job_urgent'] == 1)}")
-            print(f"Featured/Sponsored: {sum(1 for j in jobs if j['_job_featured'] == 1)}")
             
             categories = {}
             for job in jobs:
                 cat = job['_job_category'] or 'Unknown'
                 categories[cat] = categories.get(cat, 0) + 1
             
-            print("\n📂 CATEGORIES:")
-            for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+            print("\n📂 TOP CATEGORIES:")
+            for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True)[:5]:
                 print(f"  {cat}: {count}")
             
-            print("\n📋 SAMPLE JOB:")
-            print("-" * 70)
-            sample = jobs[0]
-            print(f"Title: {sample['_job_title']}")
-            print(f"Category: {sample['_job_category']}")
-            print(f"Location: {sample['_job_location']}")
-            print(f"Type: {sample['_job_type']}")
-            if sample['_job_description']:
-                desc_preview = sample['_job_description'][:200].replace('\n', ' ')
-                print(f"Description: {desc_preview}...")
             print("-" * 70)
             
         else:
-            print("\n❌ No jobs scraped. Check debug files (debug_page1.html and debug_page1.png)")
-            print("\nTroubleshooting tips:")
-            print("1. Check if Indeed is blocking your IP")
-            print("2. Try a different search URL")
-            print("3. Check the debug HTML file for CAPTCHA")
-            print("4. Try running with headless=False to see what's happening")
+            print("\n⚠️ No jobs scraped")
+            success = False
     
     except KeyboardInterrupt:
         print("\n\n⚠️ Interrupted by user")
+        success = False
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
+        success = False
     finally:
         if scraper:
             try:
@@ -656,6 +647,9 @@ def main():
             except:
                 pass
         print("\n✅ Done!")
+    
+    # Exit with proper code for GitHub Actions
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

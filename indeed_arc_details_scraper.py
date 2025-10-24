@@ -99,14 +99,14 @@ class IndeedFullDetailsScraper:
             return None
         text = f"{title or ''} {description or ''}".lower()
         categories = {
-            'IT/Software Development': [
+            'Desarrollo de TI/Software': [
                 'software', 'developer', 'programming', 'engineer', 'web', 'mobile',
                 'frontend', 'backend', 'fullstack', 'devops', 'cloud', 'java', 'python',
                 'javascript', 'react', 'angular', 'node', 'php', 'dotnet', '.net',
                 'desarrollo', 'programador', 'desarrollador', 'sistemas', 'typescript',
                 'ruby', 'golang', 'kotlin', 'swift', 'android', 'ios', 'data scientist'
             ],
-            'Customer Service': [
+            'Servicio al cliente': [
                 'customer service', 'call center', 'support', 'help desk', 'servicio al cliente',
                 'atención al cliente', 'soporte', 'representante', 'agent', 'cliente',
                 'atención', 'contact center', 'bpo'
@@ -156,11 +156,11 @@ class IndeedFullDetailsScraper:
         text_lower = text.lower()
         salary_data = {'_job_salary_type': 'monthly', '_job_salary': None, '_job_max_salary': None}
         if 'hora' in text_lower or 'hour' in text_lower or '/hr' in text_lower:
-            salary_data['_job_salary_type'] = 'hourly'
+            salary_data['_job_salary_type'] = 'hora'
         elif 'año' in text_lower or 'year' in text_lower or 'anual' in text_lower or '/yr' in text_lower:
-            salary_data['_job_salary_type'] = 'yearly'
+            salary_data['_job_salary_type'] = 'anual'
         elif 'mes' in text_lower or 'month' in text_lower or '/mo' in text_lower:
-            salary_data['_job_salary_type'] = 'monthly'
+            salary_data['_job_salary_type'] = 'mensual'
         numbers = re.findall(r'[\d\.,]+(?:\.\d{2})?', text)
         if numbers:
             cleaned = []
@@ -190,19 +190,19 @@ class IndeedFullDetailsScraper:
             if m:
                 years = int(m.group(1))
                 if years >= 7:
-                    return f"{years}+ years", 'senior'
+                    return f"{years}+ años", 'sénior'
                 elif years >= 3:
-                    return f"{years}+ years", 'mid'
+                    return f"{years}+ años", 'medio'
                 elif years >= 1:
-                    return f"{years}+ years", 'junior'
+                    return f"{years}+ años", 'júnior'
                 else:
-                    return f"{years} years", 'entry'
+                    return f"{years} años", 'entry'
         if any(w in s for w in ['senior', 'sr.', 'lead', 'principal']):
-            return '5+ years', 'senior'
+            return '5+ años', 'sénior'
         if any(w in s for w in ['junior', 'jr.', 'entry level', 'sin experiencia']):
-            return '0-2 years', 'entry'
+            return '0-2 años', 'júnior'
         if any(w in s for w in ['mid', 'intermediate', 'intermedio']):
-            return '2-5 years', 'mid'
+            return '2-5 años', 'medio'
         return None, None
 
     def extract_qualification(self, text):
@@ -210,15 +210,15 @@ class IndeedFullDetailsScraper:
             return None
         s = text.lower()
         if any(word in s for word in ['phd', 'doctorado', 'doctorate', 'ph.d']):
-            return 'doctorate'
+            return 'doctorado'
         if any(word in s for word in ['maestría', 'master', 'msc', 'mba', "master's"]):
-            return 'master'
+            return 'maestro'
         if any(word in s for word in ['licenciatura', 'bachelor', 'grado', 'university degree', "bachelor's"]):
-            return 'bachelor'
+            return 'bachiller'
         if any(word in s for word in ['técnico', 'technical', 'associate', 'diploma']):
-            return 'associate'
+            return 'asociada'
         if any(word in s for word in ['secundaria', 'high school', 'bachillerato']):
-            return 'high_school'
+            return 'escuela secundaria'
         return None
 
     def extract_job_type(self, text):
@@ -226,13 +226,13 @@ class IndeedFullDetailsScraper:
             return None
         s = text.lower()
         if 'tiempo completo' in s or 'full time' in s or 'full-time' in s:
-            return 'full-time'
+            return 'tiempo completo'
         if 'medio tiempo' in s or 'part time' in s or 'part-time' in s:
-            return 'part-time'
+            return 'medio tiempo'
         if 'temporal' in s or 'temporary' in s:
-            return 'temporary'
+            return 'temporal'
         if 'contrato' in s or 'contract' in s:
-            return 'contract'
+            return 'contrato'
         if 'internship' in s or 'pasantía' in s or 'intern' in s:
             return 'internship'
         if 'freelance' in s or 'por proyecto' in s:

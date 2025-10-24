@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nodriver beautifulsoup4 lxml
+          pip install nodriver beautifulsoup4 lxml selenium undetected-chromedriver playwright
 
       - name: Run Indeed scraper (headless + no sandbox)
         env:

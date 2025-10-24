@@ -1,12 +1,12 @@
 name: Run Indeed Scraper
 
 on:
-  workflow_dispatch:          # allow manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 6 * * *"       # runs every day at 06:00 UTC (adjust as needed)
+    - cron: "0 6 * * *"
   push:
     branches:
-      - main                  # also run on push to main
+      - main
 
 jobs:
   scrape:
@@ -26,10 +26,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install nodriver beautifulsoup4 lxml
 
-      - name: Run Indeed scraper
-        run: python indeed_arc_details_scraper.py
+      - name: Run Indeed scraper (headless + no sandbox)
+        env:
+          NO_SANDBOX: "1"
+        run: |
+          python - <<'EOF'
+          import indeed_arc_details_scraper as mod
+          import nodriver as nd
+          mod.nd.start = lambda *a, **kw: nd.start(no_sandbox=True)
+          mod.main()
+          EOF
 
-      - name: Upload results (JSON and CSV)
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
           name: indeed-scraped-data

@@ -20,6 +20,7 @@ import os
 from datetime import datetime, timedelta
 
 
+
 default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

@@ -1,43 +1,150 @@
-name: Indeed Scraper (Costa Rica)
+name: Indeed Job Scraper
 
 on:
   schedule:
-    - cron: "0 3 * * 1"  # every Monday at 3:00 UTC
-  workflow_dispatch:  # allow manual trigger
+    # Run every day at 9 AM UTC (adjust to your timezone)
+    - cron: '0 9 * * *'
+  
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions tab
+    inputs:
+      max_pages:
+        description: 'Maximum pages to scrape'
+        required: false
+        default: '5'
+      max_jobs:
+        description: 'Maximum jobs to scrape (leave empty for all)'
+        required: false
+        default: ''
 
 jobs:
-  scrape:
+  scrape-jobs:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install selenium undetected-chromedriver webdriver-manager
-
-      - name: Install Google Chrome & ChromeDriver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-      - name: Run Indeed scraper
-        run: |
-          echo "🚀 Running Indeed Scraper (Headless Stealth Mode)"
-          python indeed_full_details_scraper.py --headless || true
-
-      - name: Upload scraped data
-        uses: actions/upload-artifact@v4
-        with:
-          name: indeed_scraped_data
-          path: |
-            *.csv
-            *.json
-
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          wget \
+          unzip \
+          libglib2.0-0 \
+          libnss3 \
+          libgconf-2-4 \
+          libfontconfig1 \
+          libxss1 \
+          libappindicator3-1 \
+          libasound2 \
+          libatk-bridge2.0-0 \
+          libgtk-3-0 \
+          libx11-xcb1 \
+          libxcomposite1 \
+          libxcursor1 \
+          libxdamage1 \
+          libxi6 \
+          libxtst6 \
+          xdg-utils
+    
+    - name: Install Chrome
+      run: |
+        wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+        google-chrome --version
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install selenium undetected-chromedriver webdriver-manager
+    
+    - name: Run scraper
+      env:
+        MAX_PAGES: ${{ github.event.inputs.max_pages || '5' }}
+        MAX_JOBS: ${{ github.event.inputs.max_jobs || '' }}
+      run: |
+        python indeed_full_details_scraper.py
+    
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+    
+    - name: Upload JSON results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: jobs-json-${{ steps.date.outputs.date }}
+        path: indeed_cr_jobs_*.json
+        retention-days: 30
+    
+    - name: Upload CSV results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: jobs-csv-${{ steps.date.outputs.date }}
+        path: indeed_cr_jobs_*.csv
+        retention-days: 30
+    
+    - name: Upload debug files
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: debug-files-${{ steps.date.outputs.date }}
+        path: |
+          debug_*.png
+          debug_*.html
+        retention-days: 7
+    
+    - name: Commit and push results to repository
+      if: success()
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Create data directory if it doesn't exist
+        mkdir -p data
+        
+        # Move files to data directory
+        mv indeed_cr_jobs_*.json data/ 2>/dev/null || true
+        mv indeed_cr_jobs_*.csv data/ 2>/dev/null || true
+        
+        # Add files
+        git add data/*.json data/*.csv 2>/dev/null || true
+        
+        # Commit if there are changes
+        git diff --staged --quiet || git commit -m "Auto-update: Job scraping results $(date +'%Y-%m-%d %H:%M:%S')"
+        
+        # Push changes
+        git push || echo "No changes to push"
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## Job Scraping Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f indeed_cr_jobs_*.json ] || [ -f data/indeed_cr_jobs_*.json ]; then
+          echo "✅ **Status**: Success" >> $GITHUB_STEP_SUMMARY
+          
+          # Count jobs in JSON file
+          JSON_FILE=$(ls -t indeed_cr_jobs_*.json data/indeed_cr_jobs_*.json 2>/dev/null | head -1)
+          if [ -f "$JSON_FILE" ]; then
+            JOB_COUNT=$(python -c "import json; print(len(json.load(open('$JSON_FILE'))))")
+            echo "📊 **Jobs Scraped**: $JOB_COUNT" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "❌ **Status**: Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the debug artifacts for more information." >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Run Date**: $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY

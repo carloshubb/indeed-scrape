@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 
 
 default_deadline = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-
+# print(default_deadline)
 # Suppress warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -455,7 +455,7 @@ class IndeedFullDetailsScraper:
             '_job_category': None,
             '_job_type': None,
             '_job_tag': 'Costa Rica',
-            '_job_expiry_date': default_deadline,
+            '_job_expiry_date': None,
             '_job_gender': None,
             '_job_apply_type': 'external',
             '_job_apply_url': None,
@@ -468,7 +468,7 @@ class IndeedFullDetailsScraper:
             '_job_qualification': None,
             '_job_video_url': None,
             '_job_photos': [],
-            '_job_application_deadline_date': default_deadline,
+            '_job_application_deadline_date': None,
             '_job_address': None,
             '_job_location': None,
             '_job_map_location': None
@@ -766,7 +766,7 @@ def main():
     print()
     
     # Client's URL
-    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=d182fba1685af283"
+    search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica&from=searchOnHP&vjk=8223ee513792bd50"
     
     scraper = None
     try:

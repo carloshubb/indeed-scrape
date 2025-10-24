@@ -1,199 +1,43 @@
-name: Weekly Indeed Scraper
+name: Indeed Scraper (Costa Rica)
+
 on:
   schedule:
-    - cron: "0 0 * * 1"   # Runs every Monday at 00:00 UTC
-  workflow_dispatch:        # Allows manual trigger from GitHub UI
+    - cron: "0 3 * * 1"  # every Monday at 3:00 UTC
+  workflow_dispatch:  # allow manual trigger
 
 jobs:
-  scrape-indeed:
+  scrape:
     runs-on: ubuntu-latest
+
     steps:
-      # 1. Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      # 2. Set up Python
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-      
-      # 3. Install dependencies
+          python-version: "3.12"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install selenium webdriver-manager
-      
-      # 4. Set up Chrome and ChromeDriver (automatically matched versions)
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@latest
-        with:
-          chrome-version: stable
-      
-      - name: Install ChromeDriver
+          pip install selenium undetected-chromedriver webdriver-manager
+
+      - name: Install Google Chrome & ChromeDriver
         run: |
-          pip install webdriver-manager
-      
-      # 5. Run the Indeed scraper in headless mode
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
       - name: Run Indeed scraper
-        env:
-          PYTHONUNBUFFERED: 1
         run: |
-          python - <<'EOF'
-          from selenium import webdriver
-          from selenium.webdriver.chrome.service import Service
-          from selenium.webdriver.chrome.options import Options
-          from webdriver_manager.chrome import ChromeDriverManager
-          from selenium.webdriver.common.by import By
-          from selenium.webdriver.support.ui import WebDriverWait
-          from selenium.webdriver.support import expected_conditions as EC
-          from datetime import datetime
-          import json
-          import csv
-          import time
-          import random
-          import re
-          
-          # Set up Chrome options for headless mode
-          chrome_options = Options()
-          chrome_options.add_argument('--headless=new')
-          chrome_options.add_argument('--no-sandbox')
-          chrome_options.add_argument('--disable-dev-shm-usage')
-          chrome_options.add_argument('--disable-gpu')
-          chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-          chrome_options.add_argument('--window-size=1920,1080')
-          chrome_options.add_argument('--lang=es-ES')
-          chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-          chrome_options.add_experimental_option('useAutomationExtension', False)
-          
-          # Initialize driver with automatic ChromeDriver management
-          service = Service(ChromeDriverManager().install())
-          driver = webdriver.Chrome(service=service, options=chrome_options)
-          driver.set_page_load_timeout(30)
-          
-          print("Chrome driver initialized successfully!")
-          print(f"Chrome version: {driver.capabilities['browserVersion']}")
-          print(f"ChromeDriver version: {driver.capabilities['chrome']['chromedriverVersion']}")
-          
-          # Import the scraper class components
-          import sys
-          import os
-          
-          # Since we can't easily modify the class, let's use a simpler approach
-          # Just scrape basic job data
-          
-          search_url = "https://cr.indeed.com/jobs?q=&l=costa+rica"
-          all_jobs = []
-          
-          try:
-              for page in range(3):  # Reduce to 3 pages for faster execution
-                  url = search_url if page == 0 else f"{search_url}&start={page * 10}"
-                  print(f"\nScraping page {page + 1}...")
-                  
-                  driver.get(url)
-                  time.sleep(random.uniform(3, 5))
-                  
-                  # Scroll to load content
-                  driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-                  time.sleep(2)
-                  
-                  # Find job cards
-                  job_cards = driver.find_elements(By.CSS_SELECTOR, 'div.job_seen_beacon, div[data-jk], td.resultContent')
-                  print(f"Found {len(job_cards)} jobs")
-                  
-                  for idx, card in enumerate(job_cards, 1):
-                      try:
-                          job_data = {
-                              '_job_title': None,
-                              '_job_location': None,
-                              '_job_description': None,
-                              '_job_apply_url': None,
-                              '_job_featured_image': None,
-                              '_job_salary': None,
-                              '_job_type': None,
-                          }
-                          
-                          # Extract title
-                          try:
-                              title_elem = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle span, h2.jobTitle a')
-                              job_data['_job_title'] = title_elem.text.strip()
-                          except:
-                              pass
-                          
-                          # Extract location
-                          try:
-                              loc_elem = card.find_element(By.CSS_SELECTOR, 'div[data-testid="text-location"], .companyLocation')
-                              job_data['_job_location'] = loc_elem.text.strip()
-                          except:
-                              pass
-                          
-                          # Extract URL
-                          try:
-                              link = card.find_element(By.CSS_SELECTOR, 'h2.jobTitle a, a.jcs-JobTitle')
-                              job_data['_job_apply_url'] = link.get_attribute('href')
-                          except:
-                              pass
-                          
-                          # Extract description snippet
-                          try:
-                              snippet_elem = card.find_element(By.CSS_SELECTOR, '.job-snippet, ul.job-snippet')
-                              job_data['_job_description'] = snippet_elem.text.strip()
-                          except:
-                              pass
-                          
-                          if job_data['_job_title']:
-                              all_jobs.append(job_data)
-                              print(f"  {idx}. {job_data['_job_title'][:50]}")
-                          
-                          time.sleep(random.uniform(0.5, 1))
-                          
-                      except Exception as e:
-                          print(f"  Error extracting job {idx}: {e}")
-                          continue
-                  
-                  time.sleep(random.uniform(3, 5))
-              
-              # Save results
-              date_str = datetime.now().strftime('%Y-%m-%d')
-              json_file = f'indeed_cr_jobs_{date_str}.json'
-              csv_file = f'indeed_cr_jobs_{date_str}.csv'
-              
-              print(f"\n\nSaving {len(all_jobs)} jobs...")
-              
-              # Save JSON
-              with open(json_file, 'w', encoding='utf-8') as f:
-                  json.dump(all_jobs, f, ensure_ascii=False, indent=2)
-              print(f"Saved to {json_file}")
-              
-              # Save CSV
-              if all_jobs:
-                  keys = all_jobs[0].keys()
-                  with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-                      writer = csv.DictWriter(f, fieldnames=keys)
-                      writer.writeheader()
-                      writer.writerows(all_jobs)
-                  print(f"Saved to {csv_file}")
-              
-              print(f"\n✅ Successfully scraped {len(all_jobs)} jobs!")
-              
-          except Exception as e:
-              print(f"Error during scraping: {e}")
-              import traceback
-              traceback.print_exc()
-          
-          finally:
-              driver.quit()
-              print("Driver closed.")
-          
-          EOF
-      
-      # 6. Upload output files as artifacts
-      - name: Upload results
+          echo "🚀 Running Indeed Scraper (Headless Stealth Mode)"
+          python indeed_full_details_scraper.py --headless || true
+
+      - name: Upload scraped data
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: indeed-scraped-data
+          name: indeed_scraped_data
           path: |
-            indeed_cr_jobs_*.csv
-            indeed_cr_jobs_*.json
-          retention-days: 90
+            *.csv
+            *.json
+

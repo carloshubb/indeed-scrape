@@ -268,6 +268,93 @@ class IndeedFullDetailsScraper:
             return 'freelance'
         return None
 
+    def translate_to_spanish(self, job_data):
+        """Translate English terms to Spanish in the job data"""
+        
+        # Translate salary type
+        salary_type_map = {
+            'hourly': 'por hora',
+            'hour': 'por hora',
+            'monthly': 'mensual',
+            'month': 'mensual',
+            'annual': 'anual',
+            'yearly': 'anual',
+            'year': 'anual',
+        }
+        if job_data.get('_job_salary_type'):
+            salary_type = job_data['_job_salary_type'].lower()
+            job_data['_job_salary_type'] = salary_type_map.get(salary_type, job_data['_job_salary_type'])
+        
+        # Translate career level
+        career_level_map = {
+            'senior': 'sénior',
+            'sr': 'sénior',
+            'junior': 'júnior',
+            'jr': 'júnior',
+            'entry': 'entrada',
+            'entry level': 'entrada',
+            'mid': 'medio',
+            'mid level': 'medio',
+            'intermediate': 'medio',
+        }
+        if job_data.get('_job_career_level'):
+            career_level = job_data['_job_career_level'].lower()
+            job_data['_job_career_level'] = career_level_map.get(career_level, job_data['_job_career_level'])
+        
+        # Translate qualification
+        qualification_map = {
+            'high school': 'secundaria',
+            'associate': 'técnico',
+            'technical': 'técnico',
+            'bachelor': 'licenciatura',
+            "bachelor's": 'licenciatura',
+            'master': 'maestría',
+            "master's": 'maestría',
+            'mba': 'maestría',
+            'doctorate': 'doctorado',
+            'phd': 'doctorado',
+            'ph.d': 'doctorado',
+        }
+        if job_data.get('_job_qualification'):
+            qualification = job_data['_job_qualification'].lower()
+            job_data['_job_qualification'] = qualification_map.get(qualification, job_data['_job_qualification'])
+        
+        # Translate job type
+        job_type_map = {
+            'full time': 'tiempo completo',
+            'full-time': 'tiempo completo',
+            'part time': 'medio tiempo',
+            'part-time': 'medio tiempo',
+            'temporary': 'temporal',
+            'contract': 'contrato',
+            'internship': 'pasantía',
+            'intern': 'pasantía',
+            'freelance': 'freelance',
+        }
+        if job_data.get('_job_type'):
+            job_type = job_data['_job_type'].lower()
+            job_data['_job_type'] = job_type_map.get(job_type, job_data['_job_type'])
+        
+        # Translate tags
+        tag_map = {
+            'sponsored': 'patrocinado',
+            'urgent': 'urgente',
+            'new': 'nuevo',
+        }
+        if job_data.get('_job_tag'):
+            translated_tags = []
+            for tag in job_data['_job_tag']:
+                translated_tags.append(tag_map.get(tag.lower(), tag))
+            job_data['_job_tag'] = translated_tags
+        
+        # Translate experience text (e.g., "5+ years" -> "5+ años")
+        if job_data.get('_job_experience'):
+            exp = job_data['_job_experience']
+            exp = exp.replace('years', 'años').replace('year', 'año')
+            job_data['_job_experience'] = exp
+        
+        return job_data
+
     # -------------------------
     # Parsing helpers (BeautifulSoup)
     # -------------------------

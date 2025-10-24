@@ -83,7 +83,7 @@ class IndeedFullDetailsScraper:
                 pass
 
         # if reached here, give user a chance to manually solve in the opened browser
-        print("❗ Reached wait limit. If a captcha is shown, please solve it in the opened browser.")
+        print("⚠️ Reached wait limit. If a captcha is shown, please solve it in the opened browser.")
         # don't block indefinitely — let user press Enter to continue
         try:
             input("Press Enter after solving the captcha in the browser (or Ctrl+C to abort)...")
@@ -111,15 +111,44 @@ class IndeedFullDetailsScraper:
                 'atención al cliente', 'soporte', 'representante', 'agent', 'cliente',
                 'atención', 'contact center', 'bpo'
             ],
-            # (rest omitted for brevity — re-use your full categories mapping)
+            'Ventas y Marketing': [
+                'sales', 'marketing', 'ventas', 'vendedor', 'comercial', 'digital marketing',
+                'seo', 'sem', 'social media', 'content', 'branding', 'advertising'
+            ],
+            'Recursos Humanos': [
+                'human resources', 'hr', 'rrhh', 'recursos humanos', 'reclutamiento',
+                'recruitment', 'talent', 'payroll', 'nómina', 'benefits'
+            ],
+            'Finanzas y Contabilidad': [
+                'finance', 'accounting', 'finanzas', 'contabilidad', 'contador',
+                'auditor', 'financial', 'bookkeeper', 'tax', 'impuestos'
+            ],
+            'Administración': [
+                'administration', 'administrative', 'administración', 'administrativo',
+                'office', 'oficina', 'secretary', 'secretaria', 'assistant', 'asistente'
+            ],
+            'Educación': [
+                'teacher', 'education', 'educación', 'profesor', 'maestro', 'tutor',
+                'instructor', 'trainer', 'capacitador', 'teaching'
+            ],
+            'Salud': [
+                'health', 'healthcare', 'salud', 'medical', 'médico', 'nurse',
+                'enfermera', 'doctor', 'physician', 'clinical'
+            ],
+            'Ingeniería': [
+                'engineering', 'ingeniería', 'ingeniero', 'engineer', 'mechanical',
+                'civil', 'electrical', 'industrial', 'mecánico', 'eléctrico'
+            ],
+            'Diseño': [
+                'design', 'diseño', 'designer', 'diseñador', 'graphic', 'gráfico',
+                'ux', 'ui', 'creative', 'creativo', 'illustrator', 'photoshop'
+            ],
         }
-        # Note: include all categories as in your original — truncated here for readability
-        # Merge back the rest of category lists in real use
         for category, keywords in categories.items():
             for keyword in keywords:
                 if keyword in text:
                     return category
-        return 'General/Other'
+        return 'General/Otro'
 
     def parse_date(self, date_str):
         if not date_str:
@@ -154,9 +183,9 @@ class IndeedFullDetailsScraper:
         if not text:
             return {'_job_salary_type': None, '_job_salary': None, '_job_max_salary': None}
         text_lower = text.lower()
-        salary_data = {'_job_salary_type': 'monthly', '_job_salary': None, '_job_max_salary': None}
+        salary_data = {'_job_salary_type': 'mensual', '_job_salary': None, '_job_max_salary': None}
         if 'hora' in text_lower or 'hour' in text_lower or '/hr' in text_lower:
-            salary_data['_job_salary_type'] = 'hora'
+            salary_data['_job_salary_type'] = 'por hora'
         elif 'año' in text_lower or 'year' in text_lower or 'anual' in text_lower or '/yr' in text_lower:
             salary_data['_job_salary_type'] = 'anual'
         elif 'mes' in text_lower or 'month' in text_lower or '/mo' in text_lower:
@@ -196,12 +225,12 @@ class IndeedFullDetailsScraper:
                 elif years >= 1:
                     return f"{years}+ años", 'júnior'
                 else:
-                    return f"{years} años", 'entry'
-        if any(w in s for w in ['senior', 'sr.', 'lead', 'principal']):
+                    return f"{years} años", 'entrada'
+        if any(w in s for w in ['senior', 'sr.', 'lead', 'principal', 'sénior']):
             return '5+ años', 'sénior'
-        if any(w in s for w in ['junior', 'jr.', 'entry level', 'sin experiencia']):
+        if any(w in s for w in ['junior', 'jr.', 'entry level', 'sin experiencia', 'júnior']):
             return '0-2 años', 'júnior'
-        if any(w in s for w in ['mid', 'intermediate', 'intermedio']):
+        if any(w in s for w in ['mid', 'intermediate', 'intermedio', 'medio']):
             return '2-5 años', 'medio'
         return None, None
 
@@ -212,13 +241,13 @@ class IndeedFullDetailsScraper:
         if any(word in s for word in ['phd', 'doctorado', 'doctorate', 'ph.d']):
             return 'doctorado'
         if any(word in s for word in ['maestría', 'master', 'msc', 'mba', "master's"]):
-            return 'maestro'
+            return 'maestría'
         if any(word in s for word in ['licenciatura', 'bachelor', 'grado', 'university degree', "bachelor's"]):
-            return 'bachiller'
+            return 'licenciatura'
         if any(word in s for word in ['técnico', 'technical', 'associate', 'diploma']):
-            return 'asociada'
+            return 'técnico'
         if any(word in s for word in ['secundaria', 'high school', 'bachillerato']):
-            return 'escuela secundaria'
+            return 'secundaria'
         return None
 
     def extract_job_type(self, text):
@@ -234,7 +263,7 @@ class IndeedFullDetailsScraper:
         if 'contrato' in s or 'contract' in s:
             return 'contrato'
         if 'internship' in s or 'pasantía' in s or 'intern' in s:
-            return 'internship'
+            return 'pasantía'
         if 'freelance' in s or 'por proyecto' in s:
             return 'freelance'
         return None
@@ -322,12 +351,12 @@ class IndeedFullDetailsScraper:
         inner = str(card).lower()
         if 'patrocinado' in inner or 'sponsored' in inner:
             job_data['_job_featured'] = 1
-            job_data['_job_tag'].append('sponsored')
+            job_data['_job_tag'].append('patrocinado')
         if 'urge contratar' in inner or 'urgently' in inner or 'urgente' in inner:
             job_data['_job_urgent'] = 1
-            job_data['_job_tag'].append('urgent')
+            job_data['_job_tag'].append('urgente')
         if 'nuevo' in inner or 'nuevo' in (job_data['_job_description'] or '').lower():
-            job_data['_job_tag'].append('new')
+            job_data['_job_tag'].append('nuevo')
 
         # Logo heuristics inside card
         img = card.select_one('img')
